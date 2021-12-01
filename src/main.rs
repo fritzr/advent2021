@@ -31,8 +31,7 @@ fn main() {
     if opts.verbose {
         println!("Running day(s) {}..{}", opts.day.0, opts.day.1);
     }
-    let mut day = opts.day.0;
-    while day <= opts.day.1 {
+    for day in opts.day.0..opts.day.1 {
         match day {
              1 => d01::run(&opts),
             // 2 => d02::run(&opts),
@@ -61,6 +60,5 @@ fn main() {
             //25 => d25::run(&opts),
             _ => if opts.verbose { println!("day {} unimplemented", day) },
         }
-        day = day + 1;
     }
 }
