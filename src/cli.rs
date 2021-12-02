@@ -1,4 +1,5 @@
 use std::num::ParseIntError;
+use std::num::IntErrorKind;
 pub use structopt::StructOpt;
 
 fn parse_day_range(s: &str) -> Result<(u8, u8), ParseIntError> {
@@ -6,13 +7,22 @@ fn parse_day_range(s: &str) -> Result<(u8, u8), ParseIntError> {
         return Ok((1, 25));
     }
     let mut split = s.split("..");
-    let lb = match split.next() {
-        Some(lb) => lb.parse()?,
-        None     => 0u8,
+    let lb = match split.next().unwrap().parse::<u8>() {
+        Ok(num) => num,
+        Err(error) => match error.kind() {
+            IntErrorKind::Empty => 1u8,
+            _ => return Err(error),
+        }
     };
     let ub = match split.next() {
-        Some(ub) => ub.parse()?,
-        None     => 25u8,
+        Some(ub) => match ub.parse::<u8>() {
+            Ok(num) => num,
+            Err(error) => match error.kind() {
+                IntErrorKind::Empty => 25u8,
+                _ => return Err(error),
+            }
+        },
+        None     => lb, // no '..' was present, use single range
     };
     Ok((lb, ub))
 }
@@ -35,7 +45,9 @@ pub struct Cli {
     /// Day(s) to run (1-25).
     ///
     /// Format is like slice notation: [start][..][end].
-    /// Either enpoint is clamped to 1..25 when omitted.
-    #[structopt(default_value="", parse(try_from_str=parse_day_range))]
+    ///
+    /// If a single number is given, only runs the given day. Otherwise
+    /// if dots are present, either enpoint is clamped to 1..25 when omitted.
+    #[structopt(default_value="1..25", parse(try_from_str=parse_day_range))]
     pub day: (u8, u8),
 }

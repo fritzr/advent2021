@@ -37,18 +37,34 @@ const DAYS: [&dyn Day; 1] = [
 
 const MAX_DAY: usize = DAYS.len();
 
+fn run_day(opts: &cli::Cli, day_index: usize) -> Result<(), Box<dyn Error>> {
+    print!("Day {}: ", day_index + 1);
+    if day_index >= MAX_DAY {
+        println!("unimplemented");
+    }
+    else {
+        let (part1, part2) = DAYS[day_index].run(&opts)?;
+        println!("\n  Part 1: {}\n  Part 2: {}\n", part1, part2);
+    }
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     use structopt::StructOpt;
     let opts = cli::Cli::from_args();
-    let day_end = MAX_DAY.min((opts.day.1 + 1).into());
-    if opts.verbose {
-        println!("Running day(s) {}..{}", opts.day.0, day_end);
+    if opts.day.0 == opts.day.1 {
+        if opts.verbose {
+            println!("Running day {}", opts.day.0);
+        }
+        return run_day(&opts, (opts.day.0 - 1).into());
     }
-    let day_start = opts.day.0 - 1;
-    for day_index in day_start.into()..day_end {
-        println!("Day {}:", day_index + 1);
-        let (part1, part2) = DAYS[day_index].run(&opts)?;
-        println!("  Part 1: {}\n  Part 2: {}\n", part1, part2);
+    let day_start: usize = (opts.day.0 - 1).into();
+    let day_end: usize = MAX_DAY.min((opts.day.1 + 1).into());
+    if opts.verbose {
+        println!("Running days {}..{}", day_start, day_end);
+    }
+    for day_index in day_start..day_end {
+        run_day(&opts, day_index)?;
     }
     Ok(())
 }
