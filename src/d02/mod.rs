@@ -47,17 +47,11 @@ fn parse_instruction(line: Result<String, std::io::Error>) -> Instruction {
     let mut it = line.split(" ");
     let direction = it.next().unwrap();
     let value = it.next().unwrap().parse::<i32>().unwrap();
-    if direction == "forward" {
-        Instruction::MoveX(value)
-    }
-    else if direction == "down" {
-        Instruction::MoveY(value)
-    }
-    else if direction == "up" {
-        Instruction::MoveY(-value)
-    }
-    else {
-        panic!("unexpected direction");
+    match direction {
+        "forward" => Instruction::MoveX(value),
+        "down" => Instruction::MoveY(value),
+        "up" => Instruction::MoveY(-value),
+        _ => panic!("unexpected direction")
     }
 }
 
