@@ -24,8 +24,20 @@ fn part1(instructions: &Vec<Instruction>) -> String {
     return format!("{} forward x {} down = {}", xpos, ypos, xpos * ypos);
 }
 
-fn part2(_instructions: &Vec<Instruction>) -> String {
-    String::from("unimplemented")
+fn part2(instructions: &Vec<Instruction>) -> String {
+    let mut xpos = 0;
+    let mut ypos = 0;
+    let mut aim = 0;
+    for instruction in instructions {
+        match instruction {
+            Instruction::MoveX(val) => {
+                ypos += val;
+                xpos += val * aim;
+            },
+            Instruction::MoveY(val) => aim += val,
+        }
+    }
+    return format!("{} forward x {} down = {}", xpos, ypos, xpos * ypos);
 }
 
 pub struct Day2;
