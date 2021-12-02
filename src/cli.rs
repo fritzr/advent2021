@@ -18,7 +18,7 @@ fn parse_day_range(s: &str) -> Result<(u8, u8), ParseIntError> {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(name="advent2021", about="test")]
+#[structopt(name="advent2021", about="Solutions for Advent of Code 2021 in Rust.")]
 pub struct Cli {
     /// Display runtime of day(s).
     #[structopt(short, long)]
