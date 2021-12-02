@@ -1,6 +1,7 @@
 use std::error::Error;
 
 mod cli;
+mod util;
 mod d01;
 //mod d02;
 //mod d03;
@@ -57,6 +58,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             println!("Running day {}", opts.day.0);
         }
         return run_day(&opts, (opts.day.0 - 1).into());
+    }
+    else if opts.input.is_some() {
+        println!("ERROR: cannot specify -i with multiple days");
+        return Ok(());
     }
     let day_start: usize = (opts.day.0 - 1).into();
     let day_end: usize = MAX_DAY.min((opts.day.1 + 1).into());
