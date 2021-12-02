@@ -1,3 +1,5 @@
+use std::error::Error;
+
 mod cli;
 mod d01;
 //mod d02;
@@ -25,40 +27,28 @@ mod d01;
 //mod d24;
 //mod d25;
 
-fn main() {
+pub trait Day {
+    fn run(&self, cli: &cli::Cli) -> Result<(String, String), Box<dyn Error>>;
+}
+
+const DAYS: [&dyn Day; 1] = [
+    &d01::Day1{},
+];
+
+const MAX_DAY: usize = DAYS.len();
+
+fn main() -> Result<(), Box<dyn Error>> {
     use structopt::StructOpt;
     let opts = cli::Cli::from_args();
+    let day_end = MAX_DAY.min((opts.day.1 + 1).into());
     if opts.verbose {
-        println!("Running day(s) {}..{}", opts.day.0, opts.day.1);
+        println!("Running day(s) {}..{}", opts.day.0, day_end);
     }
-    for day in opts.day.0..opts.day.1 {
-        match day {
-             1 => d01::run(&opts),
-            // 2 => d02::run(&opts),
-            // 3 => d03::run(&opts),
-            // 4 => d04::run(&opts),
-            // 5 => d05::run(&opts),
-            // 6 => d06::run(&opts),
-            // 7 => d07::run(&opts),
-            // 8 => d08::run(&opts),
-            // 9 => d09::run(&opts),
-            //10 => d10::run(&opts),
-            //11 => d11::run(&opts),
-            //12 => d12::run(&opts),
-            //13 => d13::run(&opts),
-            //14 => d14::run(&opts),
-            //15 => d15::run(&opts),
-            //16 => d16::run(&opts),
-            //17 => d17::run(&opts),
-            //18 => d18::run(&opts),
-            //19 => d19::run(&opts),
-            //20 => d20::run(&opts),
-            //21 => d21::run(&opts),
-            //22 => d22::run(&opts),
-            //23 => d23::run(&opts),
-            //24 => d24::run(&opts),
-            //25 => d25::run(&opts),
-            _ => if opts.verbose { println!("day {} unimplemented", day) },
-        }
+    let day_start = opts.day.0 - 1;
+    for day_index in day_start.into()..day_end {
+        println!("Day {}:", day_index + 1);
+        let (part1, part2) = DAYS[day_index].run(&opts)?;
+        println!("  Part 1: {}\n  Part 2: {}\n", part1, part2);
     }
+    Ok(())
 }

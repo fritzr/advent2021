@@ -1,9 +1,12 @@
-use crate::cli;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::fs::File;
 use core::i32::MAX;
 use std::vec::Vec;
+use std::error::Error;
+
+use crate::cli;
+use crate::Day;
 
 pub fn part1(depths: &Vec<i32>) -> i32 {
     let mut last_depth = MAX;
@@ -33,11 +36,12 @@ pub fn read_numbers(filename: &str) -> Vec<i32> {
     return reader.lines().map(|s| s.unwrap().parse().unwrap()).collect();
 }
 
-pub fn run(opts: &cli::Cli) {
-    if opts.verbose {
-        println!("Running day 1...");
+pub struct Day1;
+
+impl Day for Day1 {
+    fn run(&self, _opts: &cli::Cli) -> Result<(String, String), Box<dyn Error>> {
+        let depths = read_numbers("src/d01/input.txt");
+        Ok((part1(&depths).to_string(), part2(&depths).to_string()))
     }
-    let depths = read_numbers("src/d01/input.txt");
-    println!("Number of increases: {}", part1(&depths));
-    println!("Number of increases in sliding window: {}", part2(&depths));
 }
+
