@@ -3,7 +3,7 @@ use std::error::Error;
 mod cli;
 mod util;
 mod d01;
-//mod d02;
+mod d02;
 //mod d03;
 //mod d04;
 //mod d05;
@@ -32,8 +32,9 @@ pub trait Day {
     fn run(&self, cli: &cli::Cli) -> Result<(String, String), Box<dyn Error>>;
 }
 
-const DAYS: [&dyn Day; 1] = [
+const DAYS: [&dyn Day; 2] = [
     &d01::Day1{},
+    &d02::Day2{},
 ];
 
 const MAX_DAY: usize = DAYS.len();
