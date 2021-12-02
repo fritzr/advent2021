@@ -1,5 +1,6 @@
 use std::num::ParseIntError;
 use std::num::IntErrorKind;
+use std::path::PathBuf;
 pub use structopt::StructOpt;
 
 fn parse_day_range(s: &str) -> Result<(u8, u8), ParseIntError> {
@@ -38,7 +39,7 @@ pub struct Cli {
     pub web: bool,
     /// Use alternate input file
     #[structopt(short, long)]
-    pub input: Option<String>,
+    pub input: Option<PathBuf>,
     /// Verbose output.
     #[structopt(short, long)]
     pub verbose: bool,
