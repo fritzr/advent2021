@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::io::BufRead;
 
 mod cli;
 mod util;
@@ -29,7 +30,8 @@ mod d02;
 //mod d25;
 
 pub trait Day {
-    fn run(&self, cli: &cli::Cli) -> Result<(String, String), Box<dyn Error>>;
+    fn mod_path(&self) -> &str;
+    fn run(&self, input: &mut dyn BufRead, cli: &cli::Cli) -> Result<(String, String), Box<dyn Error>>;
 }
 
 const DAYS: [&dyn Day; 2] = [
@@ -45,7 +47,9 @@ fn run_day(opts: &cli::Cli, day_index: usize) -> Result<(), Box<dyn Error>> {
         println!("unimplemented");
     }
     else {
-        let (part1, part2) = DAYS[day_index].run(&opts)?;
+        let day = &DAYS[day_index];
+        let mut input = util::read_input(opts, day.mod_path())?;
+        let (part1, part2) = day.run(input.as_mut(), &opts)?;
         println!("\n  Part 1: {}\n  Part 2: {}\n", part1, part2);
     }
     Ok(())

@@ -1,10 +1,9 @@
 use core::i32::MAX;
-use std::vec::Vec;
+use std::io::BufRead;
 use std::error::Error;
 
 use crate::cli;
 use crate::Day;
-use crate::util;
 
 pub fn part1(depths: &Vec<i32>) -> i32 {
     let mut last_depth = MAX;
@@ -31,8 +30,9 @@ pub fn part2(depths: &Vec<i32>) -> i32 {
 pub struct Day1;
 
 impl Day for Day1 {
-    fn run(&self, opts: &cli::Cli) -> Result<(String, String), Box<dyn Error>> {
-        let depths = util::read_numbers(util::input_path(opts, file!()).as_path());
+    fn mod_path(&self) -> &str { file!() }
+    fn run(&self, input: &mut dyn BufRead, _opts: &cli::Cli) -> Result<(String, String), Box<dyn Error>> {
+        let depths = input.lines().map(|s| s.unwrap().parse().unwrap()).collect();
         Ok((part1(&depths).to_string(), part2(&depths).to_string()))
     }
 }

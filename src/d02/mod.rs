@@ -1,11 +1,8 @@
+use std::io::BufRead;
 use std::error::Error;
-use std::io::{BufRead, BufReader};
-use std::fs::File;
-use std::path::Path;
 
 use crate::cli;
 use crate::Day;
-use crate::util;
 
 enum Instruction {
     MoveX(i32),
@@ -55,16 +52,11 @@ fn parse_instruction(line: Result<String, std::io::Error>) -> Instruction {
     }
 }
 
-fn read_instructions(filename: &Path) -> Vec<Instruction> {
-    let f = File::open(filename).unwrap();
-    let reader = BufReader::new(f);
-    return reader.lines().map(parse_instruction).collect();
-}
-
 impl Day for Day2 {
-    fn run(&self, opts: &cli::Cli) -> Result<(String, String), Box<dyn Error>> {
-        let nums = read_instructions(util::input_path(opts, file!()).as_path());
-        Ok((part1(&nums).to_string(), part2(&nums).to_string()))
+    fn mod_path(&self) -> &str { file!() }
+    fn run(&self, input: &mut dyn BufRead, _opts: &cli::Cli) -> Result<(String, String), Box<dyn Error>> {
+        let instructions = input.lines().map(parse_instruction).collect();
+        Ok((part1(&instructions), part2(&instructions)))
     }
 }
 
