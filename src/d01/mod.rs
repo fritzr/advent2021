@@ -1,4 +1,3 @@
-use core::i32::MAX;
 use std::io::BufRead;
 use std::error::Error;
 
@@ -6,25 +5,13 @@ use crate::cli;
 use crate::Day;
 
 pub fn part1(depths: &Vec<i32>) -> i32 {
-    let mut last_depth = MAX;
-    let mut increases = 0;
-    for depth in depths {
-        if depth > &last_depth {
-            increases += 1;
-        }
-        last_depth = *depth;
-    }
-    increases
+    depths.windows(2).filter_map(|w| if w[1] > w[0] { Some(1) } else { None }).sum()
 }
 
 pub fn part2(depths: &Vec<i32>) -> i32 {
-    let mut increases = 0;
-    for index in 3..depths.len() {
-        if depths[index] > depths[index - 3] {
-            increases += 1;
-        }
-    }
-    increases
+    //    d[n] + d[n-1] + d[n-2] > d[n-3] + d[n-2] + d[n-1]
+    // => d[n] > d[n-3]
+    depths.windows(4).filter_map(|w| if w[3] > w[0] { Some(1) } else { None }).sum()
 }
 
 pub struct Day1;
