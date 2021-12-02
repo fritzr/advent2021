@@ -1,5 +1,7 @@
 use std::error::Error;
 use std::io::BufRead;
+use std::time::{Instant, Duration};
+use std::string::ToString;
 
 mod cli;
 mod util;
@@ -29,9 +31,25 @@ mod d02;
 //mod d24;
 //mod d25;
 
+pub struct PartResult {
+    answer: String,
+    time: Duration,
+}
+
+impl PartResult {
+    pub fn from<F, T>(mut part: F) -> PartResult
+        where T: ToString, F: FnMut() -> T
+    {
+        let time = Instant::now();
+        let answer = part().to_string();
+        let time = time.elapsed();
+        PartResult { answer, time }
+    }
+}
+
 pub trait Day {
     fn mod_path(&self) -> &str;
-    fn run(&self, input: &mut dyn BufRead, cli: &cli::Cli) -> Result<(String, String), Box<dyn Error>>;
+    fn run(&self, input: &mut dyn BufRead, cli: &cli::Cli) -> Result<(PartResult, PartResult), Box<dyn Error>>;
 }
 
 const DAYS: [&dyn Day; 2] = [
@@ -48,9 +66,18 @@ fn run_day(opts: &cli::Cli, day_index: usize) -> Result<(), Box<dyn Error>> {
     }
     else {
         let day = &DAYS[day_index];
+        let input_clock = Instant::now();
         let mut input = util::read_input(opts, day.mod_path())?;
+        let input_clock = input_clock.elapsed();
         let (part1, part2) = day.run(input.as_mut(), &opts)?;
-        println!("\n  Part 1: {}\n  Part 2: {}\n", part1, part2);
+        println!();
+        println!("  Part 1: {}\n  Part 2: {}", part1.answer, part2.answer);
+        if opts.time {
+            println!("  Time\t{:?}\t{:?}\t{:?}\t{:?}",
+                input_clock, part1.time, part2.time,
+                input_clock + part1.time + part2.time);
+        }
+        println!();
     }
     Ok(())
 }
@@ -58,10 +85,10 @@ fn run_day(opts: &cli::Cli, day_index: usize) -> Result<(), Box<dyn Error>> {
 fn main() -> Result<(), Box<dyn Error>> {
     use structopt::StructOpt;
     let opts = cli::Cli::from_args();
+    if opts.time {
+        println!("Times:\tinput\t\tpart 1\tpart 2\ttotal");
+    }
     if opts.day.0 == opts.day.1 {
-        if opts.verbose {
-            println!("Running day {}", opts.day.0);
-        }
         return run_day(&opts, (opts.day.0 - 1).into());
     }
     else if opts.input.is_some() {
@@ -70,11 +97,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let day_start: usize = (opts.day.0 - 1).into();
     let day_end: usize = MAX_DAY.min((opts.day.1 + 1).into());
-    if opts.verbose {
-        println!("Running days {}..{}", day_start, day_end);
-    }
+    let clock = Instant::now();
     for day_index in day_start..day_end {
         run_day(&opts, day_index)?;
+    }
+    if opts.time {
+        println!("Total runtime: {:?}", clock.elapsed());
     }
     Ok(())
 }

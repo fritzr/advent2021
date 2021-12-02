@@ -2,7 +2,7 @@ use std::io::BufRead;
 use std::error::Error;
 
 use crate::cli;
-use crate::Day;
+use crate::{Day, PartResult};
 
 enum Instruction {
     MoveX(i32),
@@ -51,11 +51,11 @@ fn parse_instruction(line: Result<String, std::io::Error>) -> Instruction {
 impl Day for Day2 {
     fn mod_path(&self) -> &str { file!() }
     fn run(&self, input: &mut dyn BufRead, opts: &cli::Cli)
-        -> Result<(String, String), Box<dyn Error>>
+        -> Result<(PartResult, PartResult), Box<dyn Error>>
     {
         let instructions = input.lines().map(parse_instruction).collect();
-        Ok((part1(&instructions, opts.verbose).to_string(),
-            part2(&instructions, opts.verbose).to_string()))
+        Ok((PartResult::from(|| part1(&instructions, opts.verbose)),
+            PartResult::from(|| part2(&instructions, opts.verbose))))
     }
 }
 
