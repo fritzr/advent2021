@@ -9,32 +9,28 @@ enum Instruction {
     MoveY(i32),
 }
 
-fn part1(instructions: &Vec<Instruction>) -> String {
-    let mut xpos = 0;
-    let mut ypos = 0;
-    for instruction in instructions {
-        match instruction {
-            Instruction::MoveX(val) => xpos += val,
-            Instruction::MoveY(val) => ypos += val,
-        }
+fn part1(instructions: &Vec<Instruction>, verbose: bool) -> i32 {
+    // (x, y)
+    let pos = instructions.iter().fold((0,0), |pos, instruction| match instruction {
+        Instruction::MoveX(val) => (pos.0 + val, pos.1),
+        Instruction::MoveY(val) => (pos.0, pos.1 + val),
+    });
+    if verbose {
+        println!("{} forward x {} down", pos.0, pos.1);
     }
-    return format!("{} forward x {} down = {}", xpos, ypos, xpos * ypos);
+    pos.0 * pos.1
 }
 
-fn part2(instructions: &Vec<Instruction>) -> String {
-    let mut xpos = 0;
-    let mut ypos = 0;
-    let mut aim = 0;
-    for instruction in instructions {
-        match instruction {
-            Instruction::MoveX(val) => {
-                ypos += val;
-                xpos += val * aim;
-            },
-            Instruction::MoveY(val) => aim += val,
-        }
+fn part2(instructions: &Vec<Instruction>, verbose: bool) -> i32 {
+    // (x, y, aim)
+    let pos = instructions.iter().fold((0, 0, 0), |vec, instruction| match instruction {
+        Instruction::MoveX(val) => { (vec.0 + val * vec.2, vec.1 + val, vec.2) }
+        Instruction::MoveY(val) => { (vec.0, vec.1, vec.2 + val) },
+    });
+    if verbose {
+        println!("{} forward x {} down ({} aim)", pos.0, pos.1, pos.2);
     }
-    return format!("{} forward x {} down = {}", xpos, ypos, xpos * ypos);
+    pos.0 * pos.1
 }
 
 pub struct Day2;
@@ -54,9 +50,12 @@ fn parse_instruction(line: Result<String, std::io::Error>) -> Instruction {
 
 impl Day for Day2 {
     fn mod_path(&self) -> &str { file!() }
-    fn run(&self, input: &mut dyn BufRead, _opts: &cli::Cli) -> Result<(String, String), Box<dyn Error>> {
+    fn run(&self, input: &mut dyn BufRead, opts: &cli::Cli)
+        -> Result<(String, String), Box<dyn Error>>
+    {
         let instructions = input.lines().map(parse_instruction).collect();
-        Ok((part1(&instructions), part2(&instructions)))
+        Ok((part1(&instructions, opts.verbose).to_string(),
+            part2(&instructions, opts.verbose).to_string()))
     }
 }
 
