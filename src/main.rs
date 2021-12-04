@@ -7,7 +7,7 @@ mod cli;
 mod util;
 mod d01;
 mod d02;
-//mod d03;
+mod d03;
 //mod d04;
 //mod d05;
 //mod d06;
@@ -52,9 +52,10 @@ pub trait Day {
     fn run(&self, input: &mut dyn BufRead, cli: &cli::Cli) -> Result<(PartResult, PartResult), Box<dyn Error>>;
 }
 
-const DAYS: [&dyn Day; 2] = [
+const DAYS: [&dyn Day; 3] = [
     &d01::Day1{},
     &d02::Day2{},
+    &d03::Day3{},
 ];
 
 const MAX_DAY: usize = DAYS.len();
