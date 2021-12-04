@@ -74,7 +74,7 @@ fn run_day(opts: &cli::Cli, day_index: usize) -> Result<(), Box<dyn Error>> {
         println!();
         println!("  Part 1: {}\n  Part 2: {}", part1.answer, part2.answer);
         if opts.time {
-            println!("  Time\t{:?}\t{:?}\t{:?}\t{:?}",
+            println!("  Time {:<16?} {:<12?} {:<12?} {:<12?}",
                 input_clock, part1.time, part2.time,
                 input_clock + part1.time + part2.time);
         }
@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     use structopt::StructOpt;
     let opts = cli::Cli::from_args();
     if opts.time {
-        println!("Times:\tinput\t\tpart 1\tpart 2\ttotal");
+        println!(" Times: {:<16} {:<12} {:<12} {:<12}", "input", "part 1", "part 2", "total");
     }
     if opts.day.0 == opts.day.1 {
         return run_day(&opts, (opts.day.0 - 1).into());
