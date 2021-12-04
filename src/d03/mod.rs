@@ -5,7 +5,7 @@ use std::time::Instant;
 
 pub struct Day3;
 
-fn part1(input: &String) -> (u32, u32) {
+fn part1(input: &String) -> (u32, u32, usize) {
     let mut lines = input.lines();
     let first_line = lines.next().unwrap();
     let bit_width = first_line.len();
@@ -27,19 +27,37 @@ fn part1(input: &String) -> (u32, u32) {
     ).1;
     let mask = (1 << bit_width) - 1;
     let epsilon = mask & !gamma;
-    (gamma, epsilon)
+    (gamma, epsilon, bit_width)
 }
 
-/*
-                1*0     + 1               0   place=1    bit=0
-          + 2*1         + 2 *             1   place=2    bit=1
-        +4*1            + 2 * 2 *         1   place=4    bit=1
-    +8*0                + 2 * 2 * 2 *     0   place=8    bit=0
-+16*1                   + 2 * 2 * 2 * 2 * 1   place=16   bit=1
-*/
+fn collect_rating<F>(mut valid: Vec<u32>, mut msb: u32, decide: F) -> u32
+    where F: Fn(Vec<u32>, Vec<u32>) -> Vec<u32>
+{
+    while msb > 0 && valid.len() > 1 {
+        let (ones, zeros): (Vec<u32>, Vec<u32>) = valid
+            .into_iter()
+            .partition(|x| x & msb == msb);
+        valid = decide(ones, zeros);
+        msb >>= 1;
+    }
+    assert_eq!(valid.len(), 1);
+    valid[0]
+}
 
-fn part2(_input: &String, _gamma: u32, _epsilon: u32) -> (u32, u32) {
-    (0, 0)
+fn part2(input: &String, width: usize) -> (u32, u32) {
+    let input: Vec<u32> = input
+        .lines()
+        .map(|line| u32::from_str_radix(line, 2).unwrap())
+        .collect();
+    let msb: u32 = 1 << (width - 1);
+
+    let oxy = collect_rating(input.clone(), msb, |ones, zeros|
+        if ones.len() >= zeros.len() { ones } else { zeros });
+
+    let co2 = collect_rating(input, msb, |ones, zeros|
+        if zeros.len() <= ones.len() { zeros } else { ones });
+
+    (oxy, co2)
 }
 
 impl Day for Day3 {
@@ -50,16 +68,16 @@ impl Day for Day3 {
         let mut string = String::with_capacity(13000);
         input.read_to_string(&mut string)?;
         let tick = Instant::now();
-        let (gamma, epsilon) = part1(&string);
+        let (gamma, epsilon, bit_width) = part1(&string);
         let p1_time = tick.elapsed();
         if opts.verbose {
-            println!("    gamma = {}, epsilon = {}", gamma, epsilon);
+            println!("    gamma = {0} ({0:b}), epsilon = {1} ({1:b})", gamma, epsilon);
         }
         let tick = Instant::now();
-        let (oxy, co2) = part2(&string, gamma, epsilon);
+        let (oxy, co2) = part2(&string, bit_width);
         let p2_time = tick.elapsed();
         if opts.verbose {
-            println!("    oxy rating = {}, co2 rating = {}", oxy, co2);
+            println!("    oxy rating = {0} ({0:b}), co2 rating = {1} ({1:b})", oxy, co2);
         }
         Ok((PartResult { answer: (gamma * epsilon).to_string(), time: p1_time },
             PartResult { answer: (oxy * co2).to_string(), time: p2_time }))
