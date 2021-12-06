@@ -45,6 +45,15 @@ impl PartResult {
         let time = time.elapsed();
         PartResult { answer, time }
     }
+
+    pub fn maybe_from<F, T>(mut part: F) -> Result<PartResult, Box<dyn Error>>
+        where T: ToString, F: FnMut() -> Result<T, Box<dyn Error>>
+    {
+        let time = Instant::now();
+        let answer = part()?.to_string();
+        let time = time.elapsed();
+        Ok(PartResult { answer, time })
+    }
 }
 
 pub trait Day {
