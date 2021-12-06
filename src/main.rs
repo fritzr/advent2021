@@ -8,7 +8,7 @@ mod util;
 mod d01;
 mod d02;
 mod d03;
-//mod d04;
+mod d04;
 //mod d05;
 //mod d06;
 //mod d07;
@@ -61,16 +61,17 @@ pub trait Day {
     fn run(&self, input: &mut dyn BufRead, cli: &cli::Cli) -> Result<(PartResult, PartResult), Box<dyn Error>>;
 }
 
-const DAYS: [&dyn Day; 3] = [
+const DAYS: [&dyn Day; 4] = [
     &d01::Day1{},
     &d02::Day2{},
     &d03::Day3{},
+    &d04::Day4{},
 ];
 
 const MAX_DAY: usize = DAYS.len();
 
 fn run_day(opts: &cli::Cli, day_index: usize) -> Result<(), Box<dyn Error>> {
-    print!("Day {}: ", day_index + 1);
+    println!("Day {}:", day_index + 1);
     if day_index >= MAX_DAY {
         println!("unimplemented");
     }
@@ -80,7 +81,6 @@ fn run_day(opts: &cli::Cli, day_index: usize) -> Result<(), Box<dyn Error>> {
         let mut input = util::read_input(opts, day.mod_path())?;
         let input_clock = input_clock.elapsed();
         let (part1, part2) = day.run(input.as_mut(), &opts)?;
-        println!();
         println!("  Part 1: {}\n  Part 2: {}", part1.answer, part2.answer);
         if opts.time {
             println!("  Time {:<16?} {:<12?} {:<12?} {:<12?}",
