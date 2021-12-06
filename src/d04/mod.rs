@@ -2,6 +2,7 @@ use std::io::BufRead;
 use crate::{cli, Day, PartResult, util};
 use std::error::Error;
 use std::convert::From;
+use std::time::{Instant, Duration};
 
 pub struct Day4;
 
@@ -27,6 +28,8 @@ struct BingoBoard {
     col_marks: [u8; 5],
     // Sum of unmarked numbers.
     sum: usize,
+    // Winning number.
+    winner: Option<u8>,
 }
 
 impl BingoBoard {
@@ -37,6 +40,7 @@ impl BingoBoard {
             row_marks: [0; 5],
             col_marks: [0; 5],
             sum: 0,
+            winner: None,
         }
     }
 
@@ -77,9 +81,12 @@ impl BingoBoard {
         self.sum = self.sum.saturating_sub(value.into());
         self.row_marks[row] += 1;
         self.col_marks[col] += 1;
-        if usize::from(self.row_marks[row]) >= self.row_marks.len()
-            || usize::from(self.col_marks[col]) >= self.col_marks.len() {
-            Some(value)
+        // YOWO (you only win once)
+        if (usize::from(self.row_marks[row]) == self.row_marks.len()
+            || usize::from(self.col_marks[col]) == self.col_marks.len())
+            && self.winner.is_none() {
+            self.winner = Some(value);
+            self.winner
         }
         else {
             None
@@ -90,31 +97,56 @@ impl BingoBoard {
     pub fn sum(&self) -> usize { self.sum }
 }
 
-fn bingo(input: &mut dyn BufRead) -> Result<usize, Box<dyn Error>> {
+fn bingo(input: &mut dyn BufRead, verbose: bool) -> Result<(usize, usize), Box<dyn Error>> {
     let numbers = read_numbers(input)?;
-    // println!("bingo numbers: {:?}", &numbers);
+    let mut first_win_value = 0;
+    let (mut l_value, mut l_number, mut l_index, mut l_board, mut l_sum)
+        = (0, 0, 0, 0, 0);
+    if verbose {
+        println!("bingo numbers: {:?}", &numbers);
+    }
     let mut boards: Vec<BingoBoard> = util::split_groups(input)
         .map(|s| BingoBoard::from(s).unwrap())
         .collect();
-    for (num_index, num) in numbers.into_iter().enumerate() {
+    for (num_index, num) in numbers.iter().enumerate() {
         for (board_index, board) in boards.iter_mut().enumerate() {
-            if let Some(winning_number) = board.check(num) {
-                println!("  Won on number {} after {} moves: board {}, sum = {}",
-                    winning_number, num_index + 1, board_index + 1, board.sum(), );
-                return Ok(board.sum().saturating_mul(winning_number.into()));
+            if let Some(winning_number) = board.check(*num) {
+                l_sum = board.sum();
+                l_number = winning_number.into();
+                l_value = l_sum.saturating_mul(l_number);
+                if verbose {
+                    l_index = num_index;
+                    l_board = board_index;
+                }
+                if first_win_value == 0 {
+                    if verbose {
+                        println!(
+                            "  First win on number {} after {} / {} moves: board {}, sum = {}",
+                            winning_number, num_index + 1, numbers.len(), board_index + 1,
+                            board.sum());
+                    }
+                    first_win_value = l_value;
+                }
             }
         }
     }
-    Err("no winners")?
+    if verbose {
+        println!("  Last win on number {} after {} / {} moves: board {}, sum = {}",
+            l_number, l_index + 1, numbers.len(), l_board + 1, l_sum);
+    }
+    Ok((first_win_value, l_value))
 }
 
 impl Day for Day4 {
     fn mod_path(&self) -> &str { file!() }
-    fn run(&self, input: &mut dyn BufRead, _opts: &cli::Cli)
+    fn run(&self, input: &mut dyn BufRead, opts: &cli::Cli)
         -> Result<(PartResult, PartResult), Box<dyn Error>>
     {
-        Ok((PartResult::maybe_from(|| bingo(input))?,
-            PartResult::from(|| 0)))
+        let time = Instant::now();
+        let (first_win, last_win) = bingo(input, opts.verbose)?;
+        let time = time.elapsed();
+        Ok((PartResult { answer: first_win.to_string(), time },
+            PartResult { answer: last_win.to_string(), time: Duration::new(0, 0) }))
     }
 }
 
