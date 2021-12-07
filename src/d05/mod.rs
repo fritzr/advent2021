@@ -4,6 +4,7 @@ use std::error::Error;
 use std::time::{Instant, Duration};
 use std::collections::{BinaryHeap, BTreeMap};
 use std::cmp::{Ordering, Reverse};
+use std::mem::swap;
 
 pub struct Day5;
 
@@ -46,10 +47,12 @@ impl Line {
     // pub fn new() -> Line { Line { start: Point::new(), end: Point::new() } }
     pub fn from(string: String) -> Result<Line, Box<dyn Error>> {
         let mut points = string.split(" -> ");
-        Ok(Line {
-            start: Point::from(points.next().ok_or("expected start point")?.into())?,
-            end: Point::from(points.next().ok_or("expected end point")?.into())?,
-        })
+        let mut point1 = Point::from(points.next().ok_or("expected start point")?.into())?;
+        let mut point2 = Point::from(points.next().ok_or("expected start point")?.into())?;
+        if point1 > point2 {
+            swap(&mut point1, &mut point2);
+        }
+        Ok(Line { start: point1, end: point2 })
     }
     pub fn is_horiz(&self) -> bool { self.start.row == self.end.row }
     pub fn is_vert(&self) -> bool { self.start.col == self.end.col }
@@ -84,8 +87,7 @@ impl LineSweepEvent {
 }
 
 // Visit points ordered by row first, then column
-impl Ord for LineSweepEvent {
-    fn cmp(&self, other: &Self) -> Ordering {
+impl Ord for LineSweepEvent { fn cmp(&self, other: &Self) -> Ordering {
         self.point().cmp(&other.point())
     }
 }
@@ -95,6 +97,8 @@ struct LineSweep {
     events: BinaryHeap<Reverse<LineSweepEvent>>,
     // lines are ordered by where the intersect the sweep line
     active: BTreeMap<Point, Line>,
+    // intersections
+    intersections: Vec<Point>,
 }
 
 impl LineSweep {
@@ -109,14 +113,49 @@ impl LineSweep {
         sweep
     }
 
-    pub fn intersections(&self) -> Vec<Point> {
-        /* TODO
+    fn check_intersection(&mut self, line1: Line, line2: Line) -> Option<Line, Point> {
+        line1.intersection(line2).and_then(|point| {
+            self.events.push(Reverse(LineSweepEvent::Intersection(line1, line2, point)));
+            self.intersections.push(point);
+        });
+    }
+
+    fn start_event(&mut self, line: Line) {
+        match self.active.insert(line.start, line) {
+            None => (),
+            Some(_) => panic!("line squashed by identical line"),
+        };
+        // Check the nearby element in the status for an intersection.
+        self.active.next().and_then(|adjacent| {
+            self.check_intersection(line, adjacent).and_then(|point| {
+                // swap line1 and line2 in active since they've "crossed"
+                self.active.remove_entry(line.start).expect("line1");
+                let new_line = Line { start: point, end: line.end };
+                assert_gt!(point, new_line, adjacent);
+                self.active.insert(point, new_line);
+            }).or_else(|| {
+                // TODO move line to its end point?
+            });
+        });
+    }
+
+    fn end_event(&mut self, line: Line) {
+        self.active.remove(line.end).expect("line not present for removal");
+    }
+
+    fn intersection_event(&mut self, line1: Line, line2: Line, point: Point) {
+        // TODO
+    }
+
+    pub fn intersections(&mut self) -> Vec<Point> {
         while let Some(event) = self.events.pop() {
             match event {
+                LineSweepEvent::Start(line) => start_event(*line),
+                LineSweepEvent::End(line) => end_event(*line),
+                LineSweepEvent::Intersection(line1, line2, point)
+                    => intersection_event(*line1, *line2, *point),
             }
         }
-        */
-        Vec::<Point>::new()
     }
 }
 
