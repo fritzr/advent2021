@@ -2,6 +2,7 @@ use std::io::{BufRead, BufReader};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::mem::swap;
+use std::error::Error;
 
 use crate::cli;
 
@@ -15,6 +16,20 @@ fn input_path(opts: &cli::Cli, mod_path: &str) -> PathBuf {
 
 pub fn read_input(opts: &cli::Cli, mod_path: &str) -> Result<Box<dyn BufRead>, std::io::Error> {
     Ok(Box::new(BufReader::new(File::open(input_path(opts, mod_path))?)))
+}
+
+// true for a surprising number of days
+const INPUT_LEN_GUESS: usize = 1000;
+
+// Read one comma-separated line from the input.
+pub fn read_csv(input: &mut dyn BufRead) -> Result<Vec<usize>, Box<dyn Error>> {
+    let mut buffer = String::new();
+    input.read_to_string(&mut buffer)?;
+    let mut input = Vec::<usize>::with_capacity(INPUT_LEN_GUESS);
+    for num_string in buffer.split(",") {
+        input.push(num_string.trim().parse()?);
+    }
+    Ok(input)
 }
 
 pub struct SplitGroup<'a> {

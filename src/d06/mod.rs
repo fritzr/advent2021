@@ -1,11 +1,10 @@
 use std::io::BufRead;
-use crate::{cli, Day, PartResult};
+use crate::{cli, Day, PartResult, util};
 use std::error::Error;
 use std::cmp::min;
 
 pub struct Day6;
 
-const INPUT_LEN_GUESS: usize = 300;
 const SPAWN_PERIOD: usize = 7;
 const SPAWN_DELAY: usize = 2;
 const RING_SIZE: usize = SPAWN_PERIOD + SPAWN_DELAY;
@@ -61,16 +60,6 @@ fn simulate<I>(fish: I, num_days: usize, verbose: bool) -> usize
     num_fish
 }
 
-fn read_input(input: &mut dyn BufRead) -> Result<Vec<usize>, Box<dyn Error>> {
-    let mut buffer = String::new();
-    input.read_to_string(&mut buffer)?;
-    let mut input = Vec::<usize>::with_capacity(INPUT_LEN_GUESS);
-    for num_string in buffer.split(",") {
-        input.push(num_string.trim().parse()?);
-    }
-    Ok(input)
-}
-
 impl Day for Day6 {
     fn mod_path(&self) -> &str { file!() }
     fn run(&self, input: &mut dyn BufRead, opts: &cli::Cli)
@@ -84,7 +73,7 @@ impl Day for Day6 {
         if opts.verbose {
             println!("Simulating {} days", num_days);
         }
-        let input = read_input(input)?;
+        let input = util::read_csv(input)?;
         Ok((PartResult::from(|| simulate(input, num_days, opts.verbose)),
             PartResult::new()))
     }
