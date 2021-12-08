@@ -37,8 +37,8 @@ pub struct PartResult {
 }
 
 impl PartResult {
-    pub fn from<F, T>(mut part: F) -> PartResult
-        where T: ToString, F: FnMut() -> T
+    pub fn from<F, T>(part: F) -> PartResult
+        where T: ToString, F: FnOnce() -> T
     {
         let time = Instant::now();
         let answer = part().to_string();
@@ -46,8 +46,8 @@ impl PartResult {
         PartResult { answer, time }
     }
 
-    pub fn maybe_from<F, T>(mut part: F) -> Result<PartResult, Box<dyn Error>>
-        where T: ToString, F: FnMut() -> Result<T, Box<dyn Error>>
+    pub fn maybe_from<F, T>(part: F) -> Result<PartResult, Box<dyn Error>>
+        where T: ToString, F: FnOnce() -> Result<T, Box<dyn Error>>
     {
         let time = Instant::now();
         let answer = part()?.to_string();

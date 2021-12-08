@@ -1,69 +1,84 @@
 use std::io::BufRead;
 use crate::{cli, Day, PartResult};
 use std::error::Error;
-use std::time::{Instant, Duration};
-use std::collections::{BinaryHeap, BTreeMap};
-use std::cmp::{Ordering, Reverse};
-use std::mem::swap;
-use std::ops::{RangeFrom, RangeTo, Add, Sub};
-use std::convert::From;
+use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::cmp::Ordering;
 
 pub struct Day5;
 
-const INPUT_LEN_GUESS: usize = 500;
 type Coord = u16;
+const INPUT_NCOLS: usize = 1000;
+const INPUT_NROWS: usize = 1000;
+const INPUT_GRID: usize = INPUT_NROWS * INPUT_NCOLS;
+const INPUT_LEN_GUESS: usize = 500;
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)] // PartialOrd, Eq
 struct Point {
     col: Coord,
     row: Coord,
 }
 
-fn compare_value<T>(ord: Ordering) -> T
-    where T: From<i32>
-{
-    match ord {
-        Ordering::Less => -1,
-        Ordering::Equal => 0,
-        Ordering::Greater => 1,
-    }
-}
+#[derive(Debug, Clone, Copy)]
+struct PointDelta(Ordering, Ordering);
 
 impl Point {
     // pub fn new() -> Point { Point { col: 0, row: 0 } }
     pub fn from(string: String) -> Result<Point, Box<dyn Error>> {
         let mut coords = string.split(",");
-        Ok(Point {
+        let point = Point {
             col: coords.next().ok_or("expected first point coordinate")?.parse()?,
             row: coords.next().ok_or("expected second point coordinate")?.parse()?,
-        })
-    }
-    pub fn x() -> Coord { col }
-    pub fn y() -> Coord { row }
-    // Invert the x and y coordinates.
-    pub fn inverse(&self) -> Point {
-        Point { col: self.row, row: self.col }
-    }
-    // Convert to a unit point, so each coordinate has magnitude 1 or 0.
-    pub fn unit(&self) -> Point {
-        Point { col: compare_value(self.col.cmp(&0)), row: compare_value(self.row.cmp(&0)) }
-    }
-}
-
-impl Ord for Point {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match self.row.cmp(&other.row) {
-            Ordering::Equal => self.col.cmp(&other.col),
-            cmp => cmp
+        };
+        if usize::from(point.col) >= INPUT_NCOLS {
+            Err(format!("col {} exceeds ncols {}", point.col, INPUT_NCOLS).into())
+        } else if usize::from(point.row) >= INPUT_NROWS {
+            Err(format!("row {} exceeds nrows {}", point.row, INPUT_NROWS).into())
+        } else {
+            Ok(point)
         }
+    }
+    // Convert to a delta point.
+    pub fn delta(&self, other: Point) -> PointDelta {
+        PointDelta(self.col.cmp(&other.col), self.row.cmp(&other.row))
     }
 }
 
 impl Add for Point {
     type Output = Self;
-
     fn add(self, other: Self) -> Self {
         Self { row: self.row + other.row, col: self.col + other.col }
+    }
+}
+
+impl AddAssign for Point {
+    fn add_assign(&mut self, other: Self) {
+        self.row += other.row;
+        self.col += other.col;
+    }
+}
+
+fn apply_delta(coord: Coord, dir: Ordering) -> Coord {
+    match dir {
+        Ordering::Less => coord.saturating_sub(1),
+        Ordering::Greater => coord + 1,
+        Ordering::Equal => coord,
+    }
+}
+
+impl Add<PointDelta> for Point {
+    type Output = Self;
+    fn add(self, delta: PointDelta) -> Point {
+        Point {
+            col: apply_delta(self.col, delta.0),
+            row: apply_delta(self.row, delta.1),
+        }
+    }
+}
+
+impl AddAssign<PointDelta> for Point {
+    fn add_assign(&mut self, delta: PointDelta) {
+        self.col = apply_delta(self.col, delta.0);
+        self.row = apply_delta(self.row, delta.1);
     }
 }
 
@@ -75,395 +90,58 @@ impl Sub for Point {
     }
 }
 
+impl SubAssign for Point {
+    fn sub_assign(&mut self, other: Self) {
+        self.row -= other.row;
+        self.col -= other.col;
+    }
+}
+
 // Iterator over Points.
 struct Points {
-    cur: Point,
+    next: Point,
     end: Point,
-    delta: Point,
+    delta: PointDelta,
 }
 
 impl Iterator for Points {
     type Item = Point;
 
     fn next(&mut self) -> Option<Point> {
-        if self.cur == end {
+        if self.next == self.end {
             None
         } else {
-            self.cur += self.delta;
-            Ok(self.cur)
+            let current = Some(self.next);
+            self.next += self.delta;
+            current
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)] // , PartialEq, PartialOrd, Eq
 struct Line {
     start: Point,
     end: Point,
-}
-
-enum Intersection {
-    Intersect(Point),
-    Overlap(Line),
 }
 
 impl Line {
     // pub fn new() -> Line { Line { start: Point::new(), end: Point::new() } }
     pub fn from(string: String) -> Result<Line, Box<dyn Error>> {
         let mut points = string.split(" -> ");
-        let mut point1 = Point::from(points.next().ok_or("expected start point")?.into())?;
-        let mut point2 = Point::from(points.next().ok_or("expected start point")?.into())?;
-        if point1 > point2 {
-            swap(&mut point1, &mut point2);
-        }
-        Ok(Line { start: point1, end: point2 })
+        Ok(Line {
+            start: Point::from(points.next().ok_or("expected start point")?.into())?,
+            end: Point::from(points.next().ok_or("expected start point")?.into())?,
+        })
     }
     pub fn is_horiz(&self) -> bool { self.start.row == self.end.row }
     pub fn is_vert(&self) -> bool { self.start.col == self.end.col }
-    pub fn xmin(&self) -> Point {
-        if self.start.x() < self.end.x() { self.start } else { self.end }
-    }
-    pub fn xmax(&self) -> Point {
-        if self.start.x() < self.end.x() { self.end } else { self.start }
-    }
-    pub fn ymin(&self) -> Point { self.start }
-    pub fn ymax(&self) -> Point { self.end }
 
     pub fn points(&self) -> Points {
+        let delta = self.end.delta(self.start);
         Points {
-            cur: self.start,
-            end: self.end,
-            delta: (self.end - self.start).unit(),
-        }
-    }
-
-    // Invert the x and y coordinates of the line.
-    // Notable turns horizontal lines vertical and vice-versa.
-    //   0123                 0123
-    //       p                    q
-    // 0    /               0    /
-    // 1   /  => inverse => 1   /
-    // 2  /                 2  /
-    // 3 /                  3 /
-    //  q                    p
-    //   0123                 0123
-    // 0                    0   |p
-    // 1 p  q => inverse => 1   |
-    // 2 ----               2   |
-    // 3                    3   |q
-    pub fn inverse(&self) -> Line {
-        Line { start: self.start.inverse(), end: self.end.inverse() }
-    }
-
-    // Ok(0) for horizontal,
-    // 1 or -1 for diagonal,
-    // None for vertical.
-    pub fn slope(&self) -> Option<Coord> {
-        if self.is_vert() {
-            None // vertical
-        } else {
-            if self.end.y() == self.start.y() {
-                return Ok(0); // horizontal
-            }
-            // diagonal
-            let sgny = self.end.y() - self.start.y();
-            let sgnx = self.end.x() - self.start.x();
-            if (sgny > 0) == (sgnx > 0) {
-                Ok(1)
-            } else {
-                Ok(-1)
-            }
-        }
-    }
-
-    pub fn intercept(&self) -> Option<Coord> {
-        if self.is_vert() {
-            None
-        } else if self.is_horiz() {
-            Ok(self.start.y())
-        } else {
-            Ok(self.start.y() - self.start.x() * self.slope())
-        }
-    }
-
-    pub fn intersection(&self, other: &Self) -> Option<Intersection> {
-        let (p, q) = (self.start, self.end);
-        let (r, s) = (other.start, other.end);
-        // Recognize all cases of line intersection, after identifying that each line is
-        // either horizontal, vertical, or diagonal with slope either 1 or -1.
-
-        // 1. Horizontal lines.
-        if self.is_horiz() && other.is_horiz() {
-            let y = p.y();
-            // Lines must have the same Y to overlap.
-            // According to the sort criteria, Px < Qx and Rx < Sx.
-            //  P--------R======S----Q
-            if y != r.y() || r.x() > q.x() || s.x() < p.x() {
-                return None;
-            }
-            let xmin = max(p.x(), r.x());
-            let xmax = min(s.x(), q.x());
-            if xmin == xmax {
-                return Ok(Intersection::Intersect(Point { col: xmin, row: y }));
-            }
-            return Ok(Intersection::Overlap(Line {
-                start: Point { col: xmin, row: y },
-                end: Point { col: xmax, row: y }
-            }));
-        }
-
-        // 2. Vertical lines.
-        if self.is_vert() && other.is_vert() {
-            // Handle exactly as horizontal lines with flipped x and y coordinates.
-            return match self.inverse().intersection(other.inverse()) {
-                Ok(Intersection::Intersect(p)) => Ok(p.inverse()),
-                Ok(Intersection::Overlap(l)) => Ok(l.inverse()),
-                None => None,
-            };
-        }
-
-        // 3a. Self horizontal, other vertical.
-        if self.is_horiz() && other.is_vert() {
-            // According to the sort criteria, Ry < Sy and Px < Qx.
-            //      R              R
-            //      |              |
-            // P----+--Q   P-----Q |
-            //      |              |
-            //      S              S
-            if p.x() <= r.x() && r.x() <= q.x() && r.y() <= p.y() && s.y() >= p.y() {
-                return Ok(Intersection::Intersect(Point { col: r.col, row: p.row }));
-            }
-            return None;
-        }
-
-        // 3b. Self vertical, other horizontal -- handle using 3a by swapping args.
-        if self.is_vert() && other.is_horiz() {
-            return other.intersection(self);
-        }
-
-        // 4a. Self horizontal, other diagonal.
-        if self.is_horiz() {
-            if r.y() <= p.y() && s.y() >= p.y() {
-                // Solving for PQ = RS yields x = (Py - y0) / m, where
-                //   m = (Sy - Ry) / (Sx - Rx)    (slope)
-                //   y0 = Sy - Sx * m             (intercept);
-                // This reduces to
-                //   x = (Py - Sy) / m + Sx
-                // And we have an intersection when min{Px,Qx} <= x <= max{Px,Qx}.
-                // Note that the slope is always 1 or -1,
-                // so multiplying by m and dividing by m are equivalent.
-                let m = other.slope().expect("[4a,m] other must be diagonal");
-                let x = m * (p.y() - s.y()) + s.x();
-                if self.xmin() <= x && x <= self.xmax() {
-                    let y = m * x + other.intercept().expect("[4a,y0] other must be diagonal");
-                    return Ok(Intersection::Intersect(Point { col: x, row: y }));
-                }
-            }
-            return None;
-        }
-
-        // 4b. Other horizontal, self diagonal -- handle using 4a by swapping args.
-        if other.is_horiz() {
-            return other.intersection(self);
-        }
-
-        // 5a. Self vertical, other diagonal -- handle as 4 with flipped x and y coordinates.
-        if self.is_vert() {
-            return match self.inverse().intersection(other.inverse()) {
-                Ok(Intersection::Intersect(p)) => Ok(p.inverse()),
-                Ok(Intersection::Overlap(l)) => Ok(l.inverse()),
-                None => None,
-            };
-        }
-
-        // 5b. Other vertical, self diagonal -- handle using 5a by swapping args.
-        if other.is_vert() {
-            return other.intersection(self);
-        }
-
-        // 6. Both diagonal.
-
-        // 6a. Parallel diagonals.
-        if self.slope() == other.slope() {
-            // P          By the sorting criteria, Py < Qy and Ry < Sy.
-            //  \         Parallel diagonals overlap when the lines have the same y-intercept.
-            //   \
-            //   XX R
-            //    \\
-            //     \\
-            //      XX S
-            //        \
-            //         Q
-            if self.intercept() == other.intercept()
-                && !(other.xmax() < self.xmin() || other.xmin() > self.xmax()) {
-                // start = min{p, r}
-                let start = if r.y() < p.y() {
-                    Point { col: r.x(), r.y() }
-                } else {
-                    Point { col: p.x(), p.y() }
-                };
-                // end = max{q, s}
-                let end = if s.y() > q.y() {
-                    Point { col: s.x(), s.y() }
-                } else {
-                    Point { col: q.x(), q.y() }
-                };
-                return if start == end {
-                    Ok(Intersection::Intersect(start))
-                } else {
-                    Ok(Intersection::Overlap(Line { start, end }))
-                };
-            }
-            return None;
-        }
-
-        // 6b. Orthogonal diagonals: self.slope() === -1 * other.slope().
-        let m = self.slope().expect("[6b,m] self must be diagonal");
-        // Solving for PQ = RS where m = self.slope() and m' = other.slope() and m == -m' gives:
-        //   x = [ 1/m * (Py - Ry) - Px - Rx ] / 2
-        // Remember m is always 1 or -1 so multiplying and dividing by m are equivalent.
-        // Furthermore, m' (other.slope()) is always -m.
-        let x = (m * (p.y() - r.y()) - p.x() - r.x()) / 2;
-        if self.xmin() <= x && x <= self.xmax() {
-            let y = m * x + self.intercept().expect("[6b,y0] self must be diagonal");
-            return Ok(Intersection::Intersect(Point { col: x, row: y }));
-        }
-
-        None
-    }
-}
-
-impl Ord for Line {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Opposite dimensions from event ordering of points;
-        // order by col first, then by row
-        match self.start.col.cmp(&other.start.col) {
-            Ordering::Equal => self.start.row.cmp(&other.start.row),
-            cmp => cmp
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialOrd, PartialEq, Eq)]
-enum LineSweepEvent {
-    Start(Line),
-    End(Line),
-    Intersection(Line, Line, Point),
-}
-
-impl LineSweepEvent {
-    fn point(&self) -> Point {
-        match self {
-            LineSweepEvent::Start(l) => l.start,
-            LineSweepEvent::End(l) => l.end,
-            LineSweepEvent::Intersection(_, _, p) => *p,
-        }
-    }
-    // If points are equal, sort by opposite end
-    fn backup(&self) -> Point {
-        match self {
-            LineSweepEvent::Start(l) => l.end,
-            LineSweepEvent::End(l) => l.start,
-            // Classically we sort around intersection points by the line's angle.
-            LineSweepEvent::Intersection(_, l2, _) => l2.start,
-        }
-    }
-}
-
-// Visit points ordered by row first, then column
-impl Ord for LineSweepEvent {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match self.point().cmp(&other.point()) {
-            Ordering::Equal => self.backup().cmp(&other.backup()),
-            cmp => cmp,
-        }
-    }
-}
-
-struct LineSweep {
-    // min-heap, visit points in ascending order
-    events: BinaryHeap<Reverse<LineSweepEvent>>,
-    // lines are ordered by where they intersect the sweep line
-    // TODO provide total order for multiple lines at one intersection point
-    //      (classically done sorting by angle... we could do that too)
-    active: BTreeMap<Point, Line>,
-    // intersections
-    intersections: Vec<Point>,
-}
-
-impl LineSweep {
-    pub fn from<'a, I>(lines: I) -> LineSweep
-        where I: IntoIterator<Item=&'a Line>
-    {
-        let mut sweep = LineSweep { events: BinaryHeap::new(), active: BTreeMap::new() };
-        for line in lines {
-            sweep.events.push(Reverse(LineSweepEvent::Start(*line)));
-            sweep.events.push(Reverse(LineSweepEvent::End(*line)));
-        }
-        sweep
-    }
-
-    fn check_intersection(&mut self, line1: Line, line2: Line) {
-        line1.intersection(line2).and_then(|intersection| {
-            match intersection {
-                Intersection::Intersect(point) => {
-                    self.intersections.push(point);
-                    self.events.push(Reverse(LineSweepEvent::Intersection(line1, line2, point)));
-                },
-                // For overlaps, we want to record the intersection points but not visit them
-                // later as events, since they won't add any new information. The overlap will
-                // already contain at least one Start or End event for at least one of the lines.
-                Intersection::Overlap(line) => {
-                    self.intersections.append(line.points().collect());
-                },
-            }
-        });
-    }
-
-    fn check_adjacent(&mut self, line: Line) {
-        // Check the adjacent lines in the status for intersections.
-        self.active.range(RangeFrom { start: line.start })
-            .next().expect("range doesn't contain start")
-            .next().and_then(|radjacent| self.check_intersection(line, radjacent));
-        self.active.range(RangeTo { end: line.start }).rev()
-            .next().and_then(|ladjacent| self.check_intersection(ladjacent, line));
-    }
-
-    fn update_active(&mut self, line: Line, point: Point) -> Line {
-        // swap line1 and line2 in active since they've "crossed"
-        self.active.remove_entry(line.start).expect("intersection line not in status");
-        let new_line = Line { start: point, end: line.end };
-        assert_gt!(new_line, line);
-        let result = new_line.clone();
-        self.active.insert(point, new_line);
-        result
-    }
-
-    fn start_event(&mut self, line: Line) {
-        // TODO -- anything else here?
-        self.check_adjacent(line);
-    }
-
-    fn end_event(&mut self, line: Line) {
-        // TODO this will not find the line correctly in the status, since status is currently
-        // sorted by the prior point at which it intersected the sweep line
-        self.active.remove(line.end).expect("line not present for removal");
-    }
-
-    fn intersection_event(&mut self, line1: Line, line2: Line, point: Point) {
-        // TODO -- anything else here?
-        let new_line = self.update_active(line1, point);
-        let new_line = self.update_active(line2, point);
-        self.check_adjacent(new_line);
-    }
-
-    pub fn intersections(&mut self) -> Vec<Point> {
-        while let Some(event) = self.events.pop() {
-            match event {
-                LineSweepEvent::Start(line) => start_event(*line),
-                LineSweepEvent::End(line) => end_event(*line),
-                LineSweepEvent::Intersection(line1, line2, point)
-                    => intersection_event(*line1, *line2, *point),
-            }
+            next: self.start,
+            end: self.end + delta, // one past the end
+            delta,
         }
     }
 }
@@ -476,18 +154,45 @@ fn read_lines(input: &mut dyn BufRead) -> Result<Vec<Line>, Box<dyn Error>> {
     Ok(lines)
 }
 
+
+fn overlaps<I>(lines: I, verbose: bool) -> usize
+    where I: IntoIterator<Item=Line>
+{
+    let mut count = 0;
+    let mut graph: [u8; INPUT_GRID] = [0; INPUT_GRID];
+    for line in lines {
+        if verbose {
+            println!("  line {:?}", line);
+        }
+        for point in line.points().inspect(|p| if verbose { println!("    points {:?}", p); }) {
+            let index = usize::from(point.row) * INPUT_NCOLS + usize::from(point.col);
+            if graph[index] == 1 {
+                count += 1;
+                if verbose {
+                    println!("  overlap {:?}", point);
+                }
+            }
+            graph[index] = graph[index].saturating_add(1);
+        }
+    }
+    count
+}
+
 impl Day for Day5 {
     fn mod_path(&self) -> &str { file!() }
-    fn run(&self, input: &mut dyn BufRead, _opts: &cli::Cli)
+    fn run(&self, input: &mut dyn BufRead, opts: &cli::Cli)
         -> Result<(PartResult, PartResult), Box<dyn Error>>
     {
-        let time = Instant::now();
         let lines = read_lines(input)?;
-        let cardinal_lines = lines.iter().filter(|l| l.is_horiz() || l.is_vert());
-        let part1 = LineSweep::from(cardinal_lines).intersections().len();
-        let time = time.elapsed();
-        Ok((PartResult { answer: part1.to_string(), time },
-            PartResult { answer: "unimplemented".into(), time: Duration::new(0, 0) }))
+        Ok((
+            PartResult::from(|| {
+                overlaps(lines.iter()
+                        .filter(|l| l.is_horiz() || l.is_vert())
+                        .map(|l| *l),
+                    opts.verbose)
+            }),
+            PartResult::from(|| overlaps(lines.into_iter(), opts.verbose))
+        ))
     }
 }
 
