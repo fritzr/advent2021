@@ -51,4 +51,7 @@ pub struct Cli {
     /// if dots are present, either enpoint is clamped to 1..25 when omitted.
     #[structopt(default_value="1..25", parse(try_from_str=parse_day_range))]
     pub day: (u8, u8),
+    /// Extra day-specific arguments.
+    #[structopt(short, long)]
+    pub args: Option<Vec<String>>,
 }
