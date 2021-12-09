@@ -31,18 +31,16 @@ fn segment(character: u8) -> Option<Segment> {
 
 type SevenSeg = u8;
 
-/*
-const ZERO:  SevenSeg = A + B + C     + E + F + G; // N=6
+//const ZERO:  SevenSeg = A + B + C     + E + F + G; // N=6
 const ONE:   SevenSeg =         C         + F;     // N=2*
-const TWO:   SevenSeg = A     + C + D + E     + G; // N=5
-const THREE: SevenSeg = A     + C + D     + F + G; // N=5
+//const TWO:   SevenSeg = A     + C + D + E     + G; // N=5
+//const THREE: SevenSeg = A     + C + D     + F + G; // N=5
 const FOUR:  SevenSeg =     B + C + D     + F;     // N=4*
-const FIVE:  SevenSeg = A + B     + D     + F + G; // N=5
-const SIX:   SevenSeg = A + B     + D + E + F + G; // N=6
+//const FIVE:  SevenSeg = A + B     + D     + F + G; // N=5
+//const SIX:   SevenSeg = A + B     + D + E + F + G; // N=6
 const SEVEN: SevenSeg = A     + C         + F;     // N=3*
 const EIGHT: SevenSeg = A + B + C + D + E + F + G; // N=7*
-const NINE:  SevenSeg = A + B + C + D + F + G;     // N=6
-*/
+//const NINE:  SevenSeg = A + B + C + D + F + G;     // N=6
 
 fn sevensegment(bytes: &[u8]) -> SevenSeg {
     bytes.iter()
@@ -121,16 +119,19 @@ impl Display4 {
             .fold(0, |d4, w| (d4 << 8) | u32::from(sevensegment(w.trim().as_bytes())))
         )
     }
+
+    fn at(&self, index: usize) -> SevenSeg {
+        let shift = (3 - index) * 8;
+        let mask = (1 << 8) - 1;
+        ((self.0 >> shift) & mask) as SevenSeg
+    }
 }
 
 impl Display for Display4 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "Display4([")?;
-        let mask = (1 << 8) - 1;
         for index in 0..4 {
-            let shift = (3 - index) * 8;
-            let ss = ((self.0 >> shift) & mask) as SevenSeg;
-            write!(f, "  {:07b}", ss)?;
+            write!(f, "  {:07b}", self.at(index))?;
         }
         write!(f, "  ])")?;
         Ok(())
@@ -155,6 +156,25 @@ fn read_displays(input: &mut dyn BufRead)
     Ok((display_sets, outputs))
 }
 
+fn part1(_digits: &Vec<DisplaySet>, outputs: &Vec<Display4>) -> usize {
+    let mut count = 0;
+    for output in outputs {
+        for index in 0..4 {
+            let value = match output.at(index).count_ones() {
+                2 => ONE,
+                3 => SEVEN,
+                4 => FOUR,
+                7 => EIGHT,
+                _ => 0,
+            };
+            if value > 0 {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
 impl Day for Day8 {
     fn mod_path(&self) -> &str { file!() }
     fn run(&self, input: &mut dyn BufRead, opts: &cli::Cli)
@@ -163,17 +183,18 @@ impl Day for Day8 {
         let (display_sets, outputs) = read_displays(input)?;
         if opts.verbose {
             println!("display sets:");
-            for display_set in display_sets {
+            for display_set in &display_sets {
                 println!("  {}", display_set);
             }
             println!();
             println!("outputs:");
-            for output in outputs {
+            for output in &outputs {
                 println!("  {}", output);
             }
         }
         // TODO
-        Ok((PartResult::new(), PartResult::new()))
+        Ok((PartResult::from(|| part1(&display_sets, &outputs)),
+            PartResult::new()))
     }
 }
 
