@@ -2,136 +2,173 @@ use std::io::BufRead;
 use crate::{cli, Day, PartResult};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::ops::Add;
 
 pub struct Day8;
 
 const INPUT_LEN_GUESS: usize = 200;
 
-type Segment = u8; // one segment
-const A: Segment = 0b01000000;
-const B: Segment = 0b00100000;
-const C: Segment = 0b00010000;
-const D: Segment = 0b00001000;
-const E: Segment = 0b00000100;
-const F: Segment = 0b00000010;
-const G: Segment = 0b00000001;
+// one segment
+#[derive(Debug, Clone, Copy)]
+struct Segment(u64);
 
-fn segment(character: u8) -> Option<Segment> {
-    match character {
-        b'a' => Some(A),
-        b'b' => Some(B),
-        b'c' => Some(C),
-        b'd' => Some(D),
-        b'e' => Some(E),
-        b'f' => Some(F),
-        b'g' => Some(G),
-        _ => None,
-    }
-}
+const A: u64 = 1 << 0;
+const B: u64 = 1 << 8;
+const C: u64 = 1 << 16;
+const D: u64 = 1 << 24;
+const E: u64 = 1 << 32;
+const F: u64 = 1 << 40;
+const G: u64 = 1 << 48;
 
-type SevenSeg = u8;
-
-//const ZERO:  SevenSeg = A + B + C     + E + F + G; // N=6
-const ONE:   SevenSeg =         C         + F;     // N=2*
-//const TWO:   SevenSeg = A     + C + D + E     + G; // N=5
-//const THREE: SevenSeg = A     + C + D     + F + G; // N=5
-const FOUR:  SevenSeg =     B + C + D     + F;     // N=4*
-//const FIVE:  SevenSeg = A + B     + D     + F + G; // N=5
-//const SIX:   SevenSeg = A + B     + D + E + F + G; // N=6
-const SEVEN: SevenSeg = A     + C         + F;     // N=3*
-const EIGHT: SevenSeg = A + B + C + D + E + F + G; // N=7*
-//const NINE:  SevenSeg = A + B + C + D + F + G;     // N=6
-
-fn sevensegment(bytes: &[u8]) -> SevenSeg {
-    bytes.iter()
-        .map(|b| segment(*b))
-        .reduce(|seg1, seg2| Some(seg1? | seg2?))
-        .expect("not enough bytes for seven segments")
-        .expect("bad char in segment")
-}
-
-/*
-fn sevensegment_to_string(ss: SevenSeg) -> &'static str {
-    match ss {
-        ZERO  => "0",
-        ONE   => "1",
-        TWO   => "2",
-        THREE => "3",
-        FOUR  => "4",
-        FIVE  => "5",
-        SIX   => "6",
-        SEVEN => "7",
-        EIGHT => "8",
-        NINE  => "9",
-        _     => "?",
-    }
-}
-*/
-
-#[derive(Debug)]
-struct DisplaySet([SevenSeg; 10]); // 10 digits
-
-#[derive(Debug)]
-struct Display4(u32);          // 4 digits forming a display
-
-/*
-enum Digit {
-    Zero(u8),
-    One(u8),
-    Two(u8),
-    Three(u8),
-    Four(u8),
-    Five(u8),
-    Six(u8),
-    Seven(u8),
-    Eight(u8),
-    Nine(u8),
-}
-*/
-
-impl DisplaySet {
-    fn from(line: String) -> Result<DisplaySet, Box<dyn Error>> {
-        let mut it = line.split(" ").map(|w| sevensegment(w.trim().as_bytes()));
-        Ok(DisplaySet([
-           it.next().ok_or("EOF")?, it.next().ok_or("EOF")?, it.next().ok_or("EOF")?,
-           it.next().ok_or("EOF")?, it.next().ok_or("EOF")?, it.next().ok_or("EOF")?,
-           it.next().ok_or("EOF")?, it.next().ok_or("EOF")?, it.next().ok_or("EOF")?,
-           it.next().ok_or("EOF")?,
-        ]))
-    }
-}
-
-impl Display for DisplaySet {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "DisplaySet([")?;
-        for sevenseg in self.0.iter() {
-            write!(f, "  {:07b}", *sevenseg)?;
+impl Segment {
+    fn from(character: u8) -> Option<Segment> {
+        match character {
+            b'a' => Some(Segment(A)),
+            b'b' => Some(Segment(B)),
+            b'c' => Some(Segment(C)),
+            b'd' => Some(Segment(D)),
+            b'e' => Some(Segment(E)),
+            b'f' => Some(Segment(F)),
+            b'g' => Some(Segment(G)),
+            _ => None,
         }
-        write!(f, "  ])")?;
-        Ok(())
+    }
+
+    fn from_id(id: usize) -> Segment {
+        assert_eq!(id < 7, true);
+        Segment(1 << (id * 8))
+    }
+
+    fn id(&self) -> usize {
+        match self.0 {
+            A => 0,
+            B => 1,
+            C => 2,
+            D => 3,
+            E => 4,
+            F => 5,
+            G => 6,
+            _ => panic!("bad value for Segment"),
+        }
+    }
+
+    fn to_string(&self) -> String {
+        match self.0 {
+            A => "a".into(),
+            B => "b".into(),
+            C => "c".into(),
+            D => "d".into(),
+            E => "e".into(),
+            F => "f".into(),
+            G => "g".into(),
+            _ => "?".into(),
+        }
     }
 }
 
-impl Display4 {
-    fn from(line: String) -> Display4 {
-        Display4(
-            line.split(" ")
-            .fold(0, |d4, w| (d4 << 8) | u32::from(sevensegment(w.trim().as_bytes())))
-        )
-    }
-
-    fn at(&self, index: usize) -> SevenSeg {
-        let shift = (3 - index) * 8;
-        let mask = (1 << 8) - 1;
-        ((self.0 >> shift) & mask) as SevenSeg
-    }
-}
-
-impl Display for Display4 {
+impl Display for Segment {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "Display4([")?;
-        for index in 0..4 {
-            write!(f, "  {:07b}", self.at(index))?;
+        write!(f, "'{}'", self.to_string())
+    }
+}
+
+impl Add for Segment {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Segment(self.0 + other.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Digit(u64);
+
+const ZERO:  u64 = A + B + C     + E + F + G; // N=6
+const ONE:   u64 =         C         + F    ; // N=2*
+const TWO:   u64 = A     + C + D + E     + G; // N=5
+const THREE: u64 = A     + C + D     + F + G; // N=5
+const FOUR:  u64 =     B + C + D     + F    ; // N=4*
+const FIVE:  u64 = A + B     + D     + F + G; // N=5
+const SIX:   u64 = A + B     + D + E + F + G; // N=6
+const SEVEN: u64 = A     + C         + F    ; // N=3*
+const EIGHT: u64 = A + B + C + D + E + F + G; // N=7*
+const NINE:  u64 = A + B + C + D + F + G    ; // N=6
+
+struct Segments {
+    shift: usize,
+    digit: Digit,
+}
+
+impl Iterator for Segments {
+    type Item = Segment;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.shift == 0 {
+            None
+        } else {
+            self.shift -= 8;
+            Some(Segment((self.digit.0 >> self.shift) & 0xff))
+        }
+    }
+}
+
+impl Digit {
+    fn from(bytes: &[u8]) -> Result<Digit, Box<dyn Error>> {
+        let mut d = 0;
+        for segment in bytes.iter().map(|b| Segment::from(*b)) {
+            d |= segment.ok_or("bad segment character")?.0;
+        }
+        Ok(Digit(d))
+    }
+    fn from_segments<I>(it: I) -> Digit
+        where I: IntoIterator<Item=Segment>
+    {
+        Digit(it.into_iter().fold(0, |acc, seg| acc | seg.0))
+    }
+    // Get an iterator over the segments in the digit.
+    fn segments(&self) -> Segments {
+        Segments { shift: 8 * 8, digit: *self }
+    }
+    // Get the value (0-9) this 7-segment digit represents.
+    fn value(&self) -> u8 {
+        match self.0 {
+            ZERO  => 0,
+            ONE   => 1,
+            TWO   => 2,
+            THREE => 3,
+            FOUR  => 4,
+            FIVE  => 5,
+            SIX   => 6,
+            SEVEN => 7,
+            EIGHT => 8,
+            NINE  => 9,
+            _     => panic!("bad value for Digit"),
+        }
+    }
+}
+
+impl Display for Digit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "  {:07b}", self.0)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SegDisplay(Vec<Digit>);
+
+impl SegDisplay {
+    fn from(line: String) -> Result<SegDisplay, Box<dyn Error>> {
+        let mut vec = Vec::with_capacity(10);
+        for word in line.split(" ") {
+            vec.push(Digit::from(word.trim().as_bytes())?);
+        }
+        Ok(SegDisplay(vec))
+    }
+}
+
+impl Display for SegDisplay {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "SegDisplay([")?;
+        for digit in &self.0 {
+            write!(f, "  {}", digit)?;
         }
         write!(f, "  ])")?;
         Ok(())
@@ -139,40 +176,129 @@ impl Display for Display4 {
 }
 
 fn read_displays(input: &mut dyn BufRead)
-    -> Result<(Vec<DisplaySet>, Vec<Display4>), Box<dyn Error>>
+    -> Result<(Vec<SegDisplay>, Vec<SegDisplay>), Box<dyn Error>>
 {
-    let mut display_sets = Vec::<DisplaySet>::with_capacity(INPUT_LEN_GUESS);
-    let mut outputs = Vec::<Display4>::with_capacity(INPUT_LEN_GUESS);
+    let mut inputs = Vec::<SegDisplay>::with_capacity(INPUT_LEN_GUESS);
+    let mut outputs = Vec::<SegDisplay>::with_capacity(INPUT_LEN_GUESS);
     for line in input.lines() {
         let line = line?;
         let mut parts = line.split(" | ");
-        display_sets.push(
-            DisplaySet::from(parts.next().ok_or("expected ten digit part")?.into())?
+        inputs.push(
+            SegDisplay::from(parts.next().ok_or("expected ten digit part")?.into())?
         );
         outputs.push(
-            Display4::from(parts.next().ok_or("expected output display part")?.into())
+            SegDisplay::from(parts.next().ok_or("expected output display part")?.into())?
         );
     }
-    Ok((display_sets, outputs))
+    Ok((inputs, outputs))
 }
 
-fn part1(_digits: &Vec<DisplaySet>, outputs: &Vec<Display4>) -> usize {
+fn part1(_inputs: &Vec<SegDisplay>, outputs: &Vec<SegDisplay>) -> usize {
     let mut count = 0;
     for output in outputs {
-        for index in 0..4 {
-            let value = match output.at(index).count_ones() {
+        for digit in &output.0 {
+            if 0 != match digit.0.count_ones() {
                 2 => ONE,
                 3 => SEVEN,
                 4 => FOUR,
                 7 => EIGHT,
                 _ => 0,
-            };
-            if value > 0 {
+            } {
                 count += 1;
             }
         }
     }
     count
+}
+
+// after some careful analysis, the mapping between signal wires and segments makes sense :-)
+//
+// Returns a segment decoder D such that D[s] is the segment for the encoded segment s.
+fn careful_analysis(digits: &SegDisplay) -> [usize; 7] {
+    assert_eq!(digits.0.len(), 10);
+    // The segment numbering is shown on the left.
+    // 0  ---      The mapping of segment number to byte position in the u64 is below.
+    // 1 |   | 2    ___ ___ ___ ___ ___ ___ ___ ___ ___
+    // 3  ---      |_x_|_0_|_1_|_2_|_3_|_4_|_5_|_6_|_7_|
+    // 4 |   | 5
+    // 6  ---
+    let mut seg_codec = [0; 7];
+    // Generate counts of number of digits in which each segment appears.
+    // Each segment is conveniently laid over disjoint bytes of a u64,
+    // so simply summing segments gives the right number.
+    // We won't have more than 7 segments so we can't overflow the bytes.
+    let counts: u64 = digits.0.iter().map(|digit| digit.0).sum();
+    // Now we have assignments for segment 1, 4, and 5, which uniquely appear 6, 4, and 9 times.
+    {
+        let mut counts = counts;
+        for index in 0..7 {
+            match counts & 0xff {
+                6 => seg_codec[index] = 1, // segment 1 appears in 0,4,5,6,8,9
+                4 => seg_codec[index] = 4, // segment 4 appears in 0,2,6,8
+                9 => seg_codec[index] = 5, // segment 5 appears in 0,1,3,4,5,6,7,8,9
+                _ => (),
+            }
+            counts >>= 8;
+        }
+    }
+    // Now identify the numbers we know to be 1 (2 segs), 4 (4 segs), 7 (3 segs), or 8 (7 segs).
+    // While we're at it, repeat the segment counts without these numbers.
+    // This identifies segments 2 and 3, which have counts 4 and 5.
+    let mut digit_seven = 0;
+    let counts: u64 = digits.0.iter().filter_map(|digit| {
+        match digit.0.count_ones() {
+            2 => None,
+            4 => None,
+            3 => None,
+            7 => { digit_seven = digit.0; None },
+            _ => Some(digit.0),
+        }
+    }).sum();
+    // Now we know the assignments for segments 2 and 3, which have counts 4 and 5.
+    {
+        let mut counts = counts;
+        for index in 0..7 {
+            match counts & 0xff {
+                4 => seg_codec[index] = 2, // segment 2 appears in 0,2,3,9 (ignoring 1,4,7,8)
+                5 => seg_codec[index] = 3, // segment 3 appears in 2,3,5,6,9 (ignoring 1,4,7,8)
+                _ => (),
+            }
+            counts >>= 8;
+        }
+    }
+    // Only segments 0 and 6 remain unassigned.
+    // Segment 0 appears in digit 7 along with 2 and 5, which we've already decoded.
+    // The unassigned segment in this position must be segment 0, and the last remaining
+    // unassigned segment must be segment 6.
+    assert_ne!(digit_seven, 0);
+    for (index, decoded_seg) in seg_codec.iter().enumerate() {
+        let shift = (7 - index) * 8;
+        if *decoded_seg == 0 && ((digit_seven >> shift) & 0xff) == 0 {
+            seg_codec[index] = 6;
+            break;
+        }
+        // Don't need to explicitly assign 0 in the codec, because all slots are 0 by default.
+        // But we are done once we've found the slot for 6.
+    }
+    // Done!
+    seg_codec
+}
+
+fn unscramble_outputs(inputs: &Vec<SegDisplay>, outputs: &Vec<SegDisplay>) -> Vec<usize> {
+    let mut results = Vec::<usize>::with_capacity(outputs.len());
+    for (digits, output) in inputs.iter().zip(outputs.iter()) {
+        let seg_codec = careful_analysis(digits);
+        println!("segment map: {:?}", seg_codec);
+        results.push(output.0.iter().fold(0, |num, digit| {
+            let digit_value = Digit::from_segments(
+                digit.segments()
+                    .inspect(|seg| println!("digit composed of {} {:?}", seg, seg))
+                    .map(|seg| Segment::from_id(seg_codec[seg.id()]))
+            ).value();
+            num * 10 + usize::from(digit_value)
+        }));
+    }
+    results
 }
 
 impl Day for Day8 {
@@ -194,7 +320,9 @@ impl Day for Day8 {
         }
         // TODO
         Ok((PartResult::from(|| part1(&display_sets, &outputs)),
-            PartResult::new()))
+            PartResult::from(|| unscramble_outputs(&display_sets, &outputs)
+                                 .into_iter()
+                                 .sum::<usize>())))
     }
 }
 
