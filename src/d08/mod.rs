@@ -94,18 +94,24 @@ const EIGHT: u64 = A + B + C + D + E + F + G; // N=7*
 const NINE:  u64 = A + B + C + D + F + G    ; // N=6
 
 struct Segments {
-    shift: usize,
-    digit: Digit,
+    index: usize,
+    digit: u64,
 }
 
 impl Iterator for Segments {
     type Item = Segment;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.shift == 0 {
+        let mut mask = 0xff << (self.index * 8);
+        while self.index < 7 && (self.digit & mask) == 0 {
+            self.index += 1;
+            mask <<= 8;
+        }
+        if self.index == 7 {
             None
         } else {
-            self.shift -= 8;
-            Some(Segment((self.digit.0 >> self.shift) & 0xff))
+            let segment = Segment(self.digit & mask);
+            self.index += 1;
+            Some(segment)
         }
     }
 }
@@ -125,7 +131,7 @@ impl Digit {
     }
     // Get an iterator over the segments in the digit.
     fn segments(&self) -> Segments {
-        Segments { shift: 8 * 8, digit: *self }
+        Segments { index: 0, digit: self.0 }
     }
     // Get the value (0-9) this 7-segment digit represents.
     fn value(&self) -> u8 {
@@ -140,14 +146,14 @@ impl Digit {
             SEVEN => 7,
             EIGHT => 8,
             NINE  => 9,
-            _     => panic!("bad value for Digit"),
+            _     => panic!  ("bad value for Digit: {:056b}", self.0),
         }
     }
 }
 
 impl Display for Digit {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "  {:07b}", self.0)
+        write!(f, "  {:056b}", self.0)
     }
 }
 
@@ -214,12 +220,12 @@ fn part1(_inputs: &Vec<SegDisplay>, outputs: &Vec<SegDisplay>) -> usize {
 // after some careful analysis, the mapping between signal wires and segments makes sense :-)
 //
 // Returns a segment decoder D such that D[s] is the segment for the encoded segment s.
-fn careful_analysis(digits: &SegDisplay) -> [usize; 7] {
+fn careful_analysis(digits: &SegDisplay, verbose: bool) -> [usize; 7] {
     assert_eq!(digits.0.len(), 10);
     // The segment numbering is shown on the left.
     // 0  ---      The mapping of segment number to byte position in the u64 is below.
     // 1 |   | 2    ___ ___ ___ ___ ___ ___ ___ ___ ___
-    // 3  ---      |_x_|_0_|_1_|_2_|_3_|_4_|_5_|_6_|_7_|
+    // 3  ---      |_x_|_7_|_6_|_5_|_4_|_3_|_2_|_1_|_0_|
     // 4 |   | 5
     // 6  ---
     let mut seg_codec = [0; 7];
@@ -233,9 +239,33 @@ fn careful_analysis(digits: &SegDisplay) -> [usize; 7] {
         let mut counts = counts;
         for index in 0..7 {
             match counts & 0xff {
-                6 => seg_codec[index] = 1, // segment 1 appears in 0,4,5,6,8,9
-                4 => seg_codec[index] = 4, // segment 4 appears in 0,2,6,8
-                9 => seg_codec[index] = 5, // segment 5 appears in 0,1,3,4,5,6,7,8,9
+                6 => {
+                    seg_codec[index] = 1;
+                    if verbose {
+                        println!(
+                           "  segment {} has {} occurrences, so it must be segment {}",
+                           Segment::from_id(index).to_string(), 6, 1,
+                       );
+                    }
+                }, // segment 1 appears in 0,4,5,6,8,9
+                4 =>  {
+                    seg_codec[index] = 4; // segment 4 appears in 0,2,6,8
+                    if verbose {
+                        println!(
+                           "  segment {} has {} occurrences, so it must be segment {}",
+                           Segment::from_id(index).to_string(), 4, 4,
+                       );
+                    }
+                },
+                9 => {
+                    seg_codec[index] = 5; // segment 5 appears in 0,1,3,4,5,6,7,8,9
+                    if verbose {
+                        println!(
+                           "  segment {} has {} occurrences, so it must be segment {}",
+                           Segment::from_id(index).to_string(), 9, 5,
+                       );
+                    }
+                },
                 _ => (),
             }
             counts >>= 8;
@@ -247,10 +277,43 @@ fn careful_analysis(digits: &SegDisplay) -> [usize; 7] {
     let mut digit_seven = 0;
     let counts: u64 = digits.0.iter().filter_map(|digit| {
         match digit.0.count_ones() {
-            2 => None,
-            4 => None,
-            3 => None,
-            7 => { digit_seven = digit.0; None },
+            2 => {
+                if verbose {
+                    println!(
+                        "  digit {} has {} segments, so must be digit {}",
+                        digit, 2, 1,
+                    );
+                }
+                None
+            },
+            4 => {
+                if verbose {
+                    println!(
+                        "  digit {} has {} segments, so must be digit {}",
+                        digit, 4, 4,
+                    );
+                }
+                None
+            },
+            3 => {
+                if verbose {
+                    println!(
+                        "  digit {} has {} segments, so must be digit {}",
+                        digit, 3, 7,
+                    );
+                }
+                digit_seven = digit.0;
+                None
+            },
+            7 => {
+                if verbose {
+                    println!(
+                        "  digit {} has {} segments, so must be digit {}",
+                        digit, 7, 8,
+                    );
+                }
+                None
+            },
             _ => Some(digit.0),
         }
     }).sum();
@@ -258,10 +321,29 @@ fn careful_analysis(digits: &SegDisplay) -> [usize; 7] {
     {
         let mut counts = counts;
         for index in 0..7 {
-            match counts & 0xff {
-                4 => seg_codec[index] = 2, // segment 2 appears in 0,2,3,9 (ignoring 1,4,7,8)
-                5 => seg_codec[index] = 3, // segment 3 appears in 2,3,5,6,9 (ignoring 1,4,7,8)
-                _ => (),
+            // Skip segments we already identified (1, 4, 5)
+            if seg_codec[index] == 0 {
+                match counts & 0xff {
+                    4 => {
+                        seg_codec[index] = 2; // segment 2 appears in 0,2,3,9 (ignoring 1,4,7,8)
+                        if verbose {
+                            println!(
+                               "  segment {} has {} occurrences, so it must be segment {}",
+                               Segment::from_id(index).to_string(), 4, 2,
+                           );
+                        }
+                    },
+                    5 => {
+                        seg_codec[index] = 3; // segment 3 appears in 2,3,5,6,9 (ignoring 1,4,7,8)
+                        if verbose {
+                            println!(
+                               "  segment {} has {} occurrences, so it must be segment {}",
+                               Segment::from_id(index).to_string(), 5, 3,
+                           );
+                        }
+                    },
+                    _ => (),
+                }
             }
             counts >>= 8;
         }
@@ -272,31 +354,49 @@ fn careful_analysis(digits: &SegDisplay) -> [usize; 7] {
     // unassigned segment must be segment 6.
     assert_ne!(digit_seven, 0);
     for (index, decoded_seg) in seg_codec.iter().enumerate() {
-        let shift = (7 - index) * 8;
+        let shift = index * 8;
+        if verbose {
+            let seg = Segment::from_id(index);
+            println!("  testing segment {} ({}, {:056b}) (known to be {}) against digit 7 ({:056b})",
+                seg, index, seg.0, *decoded_seg, digit_seven);
+            println!("  shift and segment are {}, {}", shift, (digit_seven >> shift) & 0xff);
+        }
         if *decoded_seg == 0 && ((digit_seven >> shift) & 0xff) == 0 {
             seg_codec[index] = 6;
+            if verbose {
+                println!(
+                   "  unidentified segment {} does not belong to digit 7 ({:056b}) \
+                   , so it must be segment {}",
+                   Segment::from_id(index).to_string(), digit_seven, 6,
+               );
+            }
             break;
         }
         // Don't need to explicitly assign 0 in the codec, because all slots are 0 by default.
         // But we are done once we've found the slot for 6.
     }
+    if verbose {
+        println!("  final segment map: {:?}", seg_codec);
+    }
     // Done!
     seg_codec
 }
 
-fn unscramble_outputs(inputs: &Vec<SegDisplay>, outputs: &Vec<SegDisplay>) -> Vec<usize> {
+fn unscramble_outputs(inputs: &Vec<SegDisplay>, outputs: &Vec<SegDisplay>, verbose: bool)
+    -> Vec<usize>
+{
     let mut results = Vec::<usize>::with_capacity(outputs.len());
     for (digits, output) in inputs.iter().zip(outputs.iter()) {
-        let seg_codec = careful_analysis(digits);
-        println!("segment map: {:?}", seg_codec);
+        let seg_codec = careful_analysis(digits, verbose);
         results.push(output.0.iter().fold(0, |num, digit| {
             let digit_value = Digit::from_segments(
-                digit.segments()
-                    .inspect(|seg| println!("digit composed of {} {:?}", seg, seg))
-                    .map(|seg| Segment::from_id(seg_codec[seg.id()]))
+                digit.segments().map(|seg| Segment::from_id(seg_codec[seg.id()]))
             ).value();
             num * 10 + usize::from(digit_value)
         }));
+        if verbose {
+            println!("decoded digits {:?}", results[results.len()-1]);
+        }
     }
     results
 }
@@ -318,9 +418,8 @@ impl Day for Day8 {
                 println!("  {}", output);
             }
         }
-        // TODO
         Ok((PartResult::from(|| part1(&display_sets, &outputs)),
-            PartResult::from(|| unscramble_outputs(&display_sets, &outputs)
+            PartResult::from(|| unscramble_outputs(&display_sets, &outputs, opts.verbose)
                                  .into_iter()
                                  .sum::<usize>())))
     }
