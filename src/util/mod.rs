@@ -66,3 +66,7 @@ pub fn split_groups(input: &mut dyn BufRead) -> SplitGroup {
     SplitGroup { reader: input, buffer: String::new() }
 }
 
+pub fn median<T>(input: &Vec<T>) -> &T {
+    // assert_eq!(input.is_sorted(), true);
+    return &input[input.len() / 2];
+}

@@ -4,12 +4,6 @@ use std::error::Error;
 
 pub struct Day7;
 
-// minimize cost of linear distance
-fn median(input: &Vec<usize>) -> usize {
-    // assert_eq!(input.is_sorted(), true);
-    return input[input.len() / 2];
-}
-
 fn mean(input: &Vec<usize>) -> usize {
     return input.iter().sum::<usize>() / input.len();
 }
@@ -37,7 +31,7 @@ impl Day for Day7 {
         let mut input = util::read_csv(input)?;
         input.sort();
         Ok((PartResult::from(|| {
-                let position = median(&input);
+                let position = *util::median(&input);
                 if opts.verbose {
                     println!("  optimal linear position is {}", position);
                 }
