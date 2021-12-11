@@ -13,7 +13,7 @@ mod d05;
 mod d06;
 mod d07;
 mod d08;
-//mod d09;
+mod d09;
 mod d10;
 //mod d11;
 //mod d12;
@@ -74,7 +74,7 @@ const DAYS: [&dyn Day; 10] = [
     &d06::Day6{},
     &d07::Day7{},
     &d08::Day8{},
-    &d10::Day10{},
+    &d09::Day9{},
     &d10::Day10{},
 ];
 
