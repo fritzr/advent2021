@@ -6,6 +6,8 @@ use std::error::Error;
 
 use crate::cli;
 
+pub mod vec2d;
+
 fn input_path(opts: &cli::Cli, mod_path: &str) -> PathBuf {
     match &opts.input {
         Some(path) => path.clone(),
