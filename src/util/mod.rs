@@ -72,3 +72,12 @@ pub fn median<T>(input: &Vec<T>) -> &T {
     // assert_eq!(input.is_sorted(), true);
     return &input[input.len() / 2];
 }
+
+pub fn read_grid(input: &mut dyn BufRead) -> Result<vec2d::Vec2d<u8>, Box<dyn Error>> {
+    let mut lines = input.lines().peekable();
+    let width = lines.peek().ok_or("empty input")?.as_ref().map_err(|e| e.to_string())?.len();
+    Ok(lines.flat_map(|s| s.expect("EOF").into_bytes())
+       .map(|b| b - b'0')
+       .collect::<vec2d::Vec2d<u8>>()
+       .reshaped_from(|_, len| (len / width, width))?)
+}
