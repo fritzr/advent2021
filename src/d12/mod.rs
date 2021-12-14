@@ -20,7 +20,14 @@ struct Graph {
 struct Subpath(String);
 
 impl Subpath {
-    fn with_capacity(c: usize) -> Self { Subpath(String::with_capacity(c)) }
+    // fn with_capacity(c: usize) -> Self { Subpath(String::with_capacity(c)) }
+
+    fn from_with_capacity(node: &str, c: usize) -> Subpath {
+        let mut this = Subpath(String::with_capacity(capacity));
+        this.0 += node;
+        this
+    }
+
 
     fn push(&mut self, node: &str) {
         self.0 += &node[(node.len()-2)..node.len()];
@@ -29,7 +36,6 @@ impl Subpath {
         self.0 = chars.into_iter().collect();
     }
 
-    /*
     fn top(&self) -> Option<&str> {
         if self.0.len() > 1 {
             Some(&self.0[(self.0.len()-2)..self.0.len()])
@@ -37,59 +43,98 @@ impl Subpath {
             None
         }
     }
-    */
+
+    fn pop(&mut self) -> Option<String> {
+        if self.0.len() > 1 {
+            Some(self.0.drain((self.0.len()-2)..self.0.len()).collect::<String>())
+        } else {
+            None
+        }
+    }
 
     fn contains(&self, s: &str) -> bool {
         self.0.find(s).is_some()
     }
 }
 
-struct PathCounter<'a> {
-    g: &'a Graph,
-    start: String,
-    end: String,
-    counts: HashMap<Subpath, usize>,
-}
-
 fn is_lower(s: &str) -> bool {
     s.find(char::is_uppercase) == None
 }
 
-impl<'a> PathCounter<'a> {
-    fn from(g: &'a Graph, start: String, end: String) -> Self {
-        // assert_eq!(is_lower(start), true);
-        Self { g, start, end, counts: HashMap::with_capacity(g.adj.len()) }
+// Unzipped (node, children) pairs indicating a traversed node and its remaining children.
+struct PathState {
+    path: Subpath,
+    child_counts: Vec<usize>,
+}
+
+impl PathState {
+    fn with_capacity(c: usize) -> PathState {
+        PathState { path: Subpath::with_capacity(c), child_counts: Vec::with_capacity(c) }
     }
 
-    fn count_paths(&mut self, mut path: Subpath, node: &str)
-        -> usize
-    {
-        if self.end == node {
-            // prefix + end is now a complete distinct path
-            1
+    fn pop(&mut self) -> Option<(String, usize)> {
+        if let Some(top) = self.child_counts.pop() {
+            Some(self.path.pop().expect("subpath not in sync with counts"), top)
         } else {
-            path.push(node);
-            match self.counts.entry(path) {
-                Entry::Occupied(e) => *e.get(),
-                Entry::Vacant(e) => *e.insert(
-                    self.g.adj[node].iter()
-                        .filter_map(|adj| {
-                            // Don't visit lowercase nodes twice in one path.
-                            if !is_lower(node) || !path.contains(node) {
-                                Some(self.count_paths(path.clone(), adj))
-                            } else {
-                                None
-                            }
-                        })
-                        .sum()
-                )
-            }
+            None
         }
     }
+}
 
-    fn count(&mut self) -> usize {
-        let start = &self.start;
-        self.count_paths(Subpath::with_capacity(2 * self.g.adj.len()), start)
+struct PathCounter {
+    stack: Vec<&str>,
+    state: PathState,
+    // counts: HashMap<Subpath, usize>, // TODO use to recognize common subtrees
+}
+
+impl PathCounter {
+    fn with_capacity(g: &'a Graph, c: usize) -> PathCounter {
+        PathCounter { Vec::with_capacity(c), PathState::with_capacity(c) }
+    }
+
+    fn push(&mut self, g: &Graph, node: &str) {
+        self.stack.push(start);
+    }
+
+    fn count(&mut self, g: &Graph, start: &str, end: &str) -> usize {
+        let mut counts = 0;
+        self.push(start);
+        let mut popped = false;
+        while let Some(path) = stack.pop() {
+            path.push((path, self.adj[path]));
+            if let Some((node, mut children)) = path.top() {
+                // If we just popped off the status, we finished up a child traversal.
+                if popping {
+                    children -= 1;
+                    *path.1.last_mut() = children;
+                }
+                if children == 0 {
+                    path.pop();
+                    popped = true;
+                } else {
+                    // Still have children to visit.
+                    if top == self.end {
+                        // prefix is now a complete path.
+                        1
+                    } else {
+                        path.push(node);
+                        match self.counts.entry(path) {
+                            Entry::Occupied(e) => *e.get(),
+                            Entry::Vacant(e) => {
+                                let mut sum = 0;
+                                for adjacent in self.g.adj[node].iter()
+                                    .filter(|adj| !is_lower(adj) || !e.key().contains(adj))
+                                {
+                                    let next_path = e.key().clone();
+                                    self.count_paths(e.key().clone(), adjacent);
+                                }
+                                *e.insert(sum)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -111,8 +156,8 @@ impl Graph {
         Ok(Graph { adj })
     }
 
-    fn count_paths(&self, from: String, to: String) -> usize {
-        PathCounter::from(self, from, to).count()
+    fn count_paths(&self, start: &str, end: &str) -> usize {
+        PathCounter::with_capacity(g.adj.len()).count(self, start, end)
     }
 }
 
