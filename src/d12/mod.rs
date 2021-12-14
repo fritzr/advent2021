@@ -1,7 +1,7 @@
 use std::io::BufRead;
 use crate::{cli, Day, PartResult};
 use std::error::Error;
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 use std::fmt::{Display, Formatter};
 
 pub struct Day12;
@@ -16,7 +16,33 @@ struct Graph {
 // We abuse the fact that intermediate nodes always have length 2.
 // This means the input shouldn't contain "rt" or "nd" as separate nodes,
 // as that will be how "start" and "end" are stored.
-type Subpath = String;
+#[derive(Debug, Clone, PartialOrd, PartialEq, Eq, Hash)]
+struct Subpath(String);
+
+impl Subpath {
+    fn with_capacity(c: usize) -> Self { Subpath(String::with_capacity(c)) }
+
+    fn push(&mut self, node: &str) {
+        self.0 += &node[(node.len()-2)..node.len()];
+        let mut chars: Vec<char> = self.0.chars().collect();
+        chars.sort_unstable();
+        self.0 = chars.into_iter().collect();
+    }
+
+    /*
+    fn top(&self) -> Option<&str> {
+        if self.0.len() > 1 {
+            Some(&self.0[(self.0.len()-2)..self.0.len()])
+        } else {
+            None
+        }
+    }
+    */
+
+    fn contains(&self, s: &str) -> bool {
+        self.0.find(s).is_some()
+    }
+}
 
 struct PathCounter<'a> {
     g: &'a Graph,
@@ -25,12 +51,8 @@ struct PathCounter<'a> {
     counts: HashMap<Subpath, usize>,
 }
 
-fn is_lower(s: &String) -> bool {
+fn is_lower(s: &str) -> bool {
     s.find(char::is_uppercase) == None
-}
-
-fn is_upper(s: &String) -> bool {
-    s.find(char::is_lowercase) == None
 }
 
 impl<'a> PathCounter<'a> {
@@ -39,32 +61,35 @@ impl<'a> PathCounter<'a> {
         Self { g, start, end, counts: HashMap::with_capacity(g.adj.len()) }
     }
 
-    fn count_paths(&mut self, prefix: Subpath, node: String)
+    fn count_paths(&mut self, mut path: Subpath, node: &str)
         -> usize
     {
-        if node == self.end {
+        if self.end == node {
+            // prefix + end is now a complete distinct path
             1
         } else {
-            let previous = if prefix.len() > 1 {
-                prefix[(prefix.len()-2)..prefix.len()]
-            } else {
-                self.start.to_string()
-            };
-            let prefix = prefix + &node[(node.len()-2)..node.len()];
-            counts.entry(*prefix).or_insert(|| self.g.adj[node].filter_map(|adj| {
-                // Don't visit the previous node, and don't visit lowercase nodes twice.
-                if adj != previous && (!is_lower(node) || subpath.find(node) == None) {
-                    Some(self.count_paths(*prefix, adj))
-                } else {
-                    None
-                }
-            }).sum())
+            path.push(node);
+            match self.counts.entry(path) {
+                Entry::Occupied(e) => *e.get(),
+                Entry::Vacant(e) => *e.insert(
+                    self.g.adj[node].iter()
+                        .filter_map(|adj| {
+                            // Don't visit lowercase nodes twice in one path.
+                            if !is_lower(node) || !path.contains(node) {
+                                Some(self.count_paths(path.clone(), adj))
+                            } else {
+                                None
+                            }
+                        })
+                        .sum()
+                )
+            }
         }
     }
 
     fn count(&mut self) -> usize {
-        let prefix = String::with_capacity(2 * self.g.adj.len());
-        self.count_paths(prefix, self.start)
+        let start = &self.start;
+        self.count_paths(Subpath::with_capacity(2 * self.g.adj.len()), start)
     }
 }
 
