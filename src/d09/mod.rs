@@ -1,65 +1,46 @@
 use std::io::BufRead;
-use crate::{cli, Day, PartResult};
+use crate::{cli, Day, PartResult, util, util::vec2d::Vec2d};
 use std::error::Error;
 use std::time::Instant;
 use std::collections::{BinaryHeap, HashMap};
 
 pub struct Day9;
 
-fn height_at(map: &Vec<String>, (row, col): (usize, usize)) -> Option<u8> {
-    if row < map.len() && col < map[row].len() {
-        Some(map[row].as_bytes()[col] - b'0')
-    } else {
-        None
-    }
-}
-
 fn up(point: (usize, usize)) -> (usize, usize) { (point.0.overflowing_sub(1).0, point.1) }
 fn down(point: (usize, usize)) -> (usize, usize) { (point.0 + 1, point.1) }
 fn left(point: (usize, usize)) -> (usize, usize) { (point.0, point.1.overflowing_sub(1).0) }
 fn right(point: (usize, usize)) -> (usize, usize) { (point.0, point.1 + 1) }
 
-fn local_min(map: &Vec<String>, point: (usize, usize)) -> Option<u8> {
-    let height = height_at(map, point)?;
-    if point.0 > 0
-        && height_at(map, up(point)).map_or(false, |h| h <= height) {
+fn local_min(map: &Vec2d<u8>, point: (usize, usize)) -> Option<u8> {
+    let height = *map.at(point)?;
+    if point.0 > 0 && map.at(up(point)).map_or(false, |h| *h <= height) {
         None
-    } else if point.1 > 0
-        && height_at(map, left(point)).map_or(false, |h| h <= height) {
+    } else if point.1 > 0 && map.at(left(point)).map_or(false, |h| *h <= height) {
         None
-    } else if point.1 + 1 < map[point.0].len()
-        && height_at(map, right(point)).map_or(false, |h| h <= height) {
+    } else if point.1 + 1 < map.ncols() && map.at(right(point)).map_or(false, |h| *h <= height) {
         None
-    } else if point.0 + 1 < map.len()
-        && height_at(map, down(point)).map_or(false, |h| h <= height) {
+    } else if point.0 + 1 < map.nrows() && map.at(down(point)).map_or(false, |h| *h <= height) {
         None
     } else {
         Some(height)
     }
 }
 
-fn low_points(map: &Vec<String>) -> Vec<(usize, usize)> {
-    map.iter()
-        .enumerate()
-        .map(|(row_index, line)| {
-            (0..line.len()).filter_map(move |col_index| {
-                local_min(&map, (row_index, col_index))
-                    .and(Some((row_index, col_index)))
-            })
-        })
-        .flatten()
+fn low_points(map: &Vec2d<u8>) -> Vec<(usize, usize)> {
+    map.indexes()
+        .filter_map(|index| local_min(map, index).and(Some(index)))
         .collect()
 }
 
 // Love recursion, but this is awful for stack size. TODO flatten this into a smarter loop.
-fn basin_size_search(map: &Vec<String>,
+fn basin_size_search(map: &Vec2d<u8>,
                      basin: &mut HashMap<(usize, usize), usize>,
                      prev_point: (usize, usize),
                      point: (usize, usize),
                      verbose: bool,
                      ) -> usize {
     // Stop at '9' or out of bounds.
-    if height_at(map, point).map_or(true, |h| h == 9) {
+    if map.at(point).map_or(true, |h| *h == 9) {
         if verbose { println!("({:2}, {:2}) basin bounds", point.0, point.1); }
         0
     } else {
@@ -101,7 +82,7 @@ fn basin_size_search(map: &Vec<String>,
     }
 }
 
-fn basin_size(map: &Vec<String>, point: (usize, usize), verbose: bool) -> usize {
+fn basin_size(map: &Vec2d<u8>, point: (usize, usize), verbose: bool) -> usize {
     let mut basin = HashMap::<(usize, usize), usize>::new();
     let size = basin_size_search(map, &mut basin, point, point, verbose);
     if verbose {
@@ -110,7 +91,7 @@ fn basin_size(map: &Vec<String>, point: (usize, usize), verbose: bool) -> usize 
     size
 }
 
-fn basin_sizes(map: &Vec<String>, low_points: &Vec<(usize, usize)>, verbose: bool)
+fn basin_sizes(map: &Vec2d<u8>, low_points: &Vec<(usize, usize)>, verbose: bool)
     -> BinaryHeap<usize>
 {
     low_points.iter().map(|p| basin_size(map, *p, verbose)).collect()
@@ -122,10 +103,10 @@ impl Day for Day9 {
         -> Result<(PartResult, PartResult), Box<dyn Error>>
     {
         let time = Instant::now();
-        let map = input.lines().collect::<Result<Vec<String>, std::io::Error>>()?;
+        let map = util::read_grid(input)?;
         let low_points = low_points(&map);
         let risk: usize = low_points.iter()
-            .map(|(row, col)| 1 + usize::from(height_at(&map, (*row, *col)).unwrap()))
+            .map(|point| 1 + usize::from(map[*point]))
             .sum();
         let part1 = PartResult { answer: risk.to_string(), time: time.elapsed() };
         let time = Instant::now();

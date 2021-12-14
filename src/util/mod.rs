@@ -79,5 +79,5 @@ pub fn read_grid(input: &mut dyn BufRead) -> Result<vec2d::Vec2d<u8>, Box<dyn Er
     Ok(lines.flat_map(|s| s.expect("EOF").into_bytes())
        .map(|b| b - b'0')
        .collect::<vec2d::Vec2d<u8>>()
-       .reshaped_from(|_, len| (len / width, width))?)
+       .reshaped_from(|(_, len)| (len / width, width))?)
 }

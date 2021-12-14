@@ -4,37 +4,14 @@ use std::error::Error;
 
 pub struct Day11;
 
-struct Square {
-    cur:    (usize, usize),
-    bounds: (usize, usize),
-    end:    usize,
-}
-
-impl Square {
-    fn adjacent(row: usize, col: usize) -> Square {
-        Square {
-            cur:    (row.saturating_sub(1), col.saturating_sub(1)),
-            bounds: (col.saturating_sub(1), col.saturating_add(1)),
-            end:    row.saturating_add(1),
-        }
-    }
-}
-
-impl Iterator for Square {
-    type Item = (usize, usize);
-    fn next(&mut self) -> Option<Self::Item> {
-        let this = self.cur;
-        if self.cur.0 > self.end {
-            None
-        } else {
-            if self.cur.1 == self.bounds.1 {
-                self.cur = (self.cur.0 + 1, self.bounds.0);
-            } else {
-                self.cur = (self.cur.0, self.cur.1 + 1);
-            }
-            Some(this)
-        }
-    }
+fn enumerate_adjacent<T>(vec2d: &Vec2d<T>, (row, col): (usize, usize))
+    -> impl Iterator<Item = (usize, usize)>
+{
+    vec2d.enumerate_box(
+        (row.saturating_sub(1), col.saturating_sub(1))
+        ..
+        (row.saturating_add(2), col.saturating_add(2))
+    )
 }
 
 // Simulate a step and return the number of flashes.
@@ -55,7 +32,7 @@ fn step(octopi: &mut Vec2d<u8>, verbose: bool) -> usize {
         if verbose {
             println!("({}, {}) FLASH", row, col);
         }
-        Square::adjacent(row, col).for_each(|(row, col)| {
+        enumerate_adjacent(octopi, (row, col)).for_each(|(row, col)| {
             if let Some(energy) = octopi.at_mut((row, col)) {
                 if *energy != 0 {
                     if verbose {
