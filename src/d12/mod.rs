@@ -56,7 +56,7 @@ impl Subpath {
     }
 
     fn contains(&self, s: &str) -> bool {
-        self.0.find(s).is_some()
+        self.0.as_bytes().chunks(2).find(|window| window == &s.as_bytes()).is_some()
     }
 }
 
