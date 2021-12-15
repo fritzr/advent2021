@@ -1,10 +1,18 @@
 use std::io::BufRead;
 use crate::{cli, Day, PartResult};
 use std::error::Error;
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::HashMap; // , hash_map::Entry};
 use std::fmt::{Display, Formatter};
 
 pub struct Day12;
+
+fn name_trans(node: &str) -> String {
+    if node.len() == 1 {
+        node.to_owned() + node
+    } else {
+        node[(node.len()-2)..node.len()].to_owned()
+    }
+}
 
 #[derive(Debug)]
 struct Graph {
@@ -20,20 +28,15 @@ struct Graph {
 struct Subpath(String);
 
 impl Subpath {
-    // fn with_capacity(c: usize) -> Self { Subpath(String::with_capacity(c)) }
-
-    fn from_with_capacity(node: &str, c: usize) -> Subpath {
-        let mut this = Subpath(String::with_capacity(capacity));
-        this.0 += node;
-        this
-    }
-
+    fn with_capacity(c: usize) -> Self { Subpath(String::with_capacity(c)) }
 
     fn push(&mut self, node: &str) {
-        self.0 += &node[(node.len()-2)..node.len()];
+        self.0 += node;
+        /*
         let mut chars: Vec<char> = self.0.chars().collect();
         chars.sort_unstable();
         self.0 = chars.into_iter().collect();
+        */
     }
 
     fn top(&self) -> Option<&str> {
@@ -62,6 +65,7 @@ fn is_lower(s: &str) -> bool {
 }
 
 // Unzipped (node, children) pairs indicating a traversed node and its remaining children.
+#[derive(Debug)]
 struct PathState {
     path: Subpath,
     child_counts: Vec<usize>,
@@ -72,9 +76,22 @@ impl PathState {
         PathState { path: Subpath::with_capacity(c), child_counts: Vec::with_capacity(c) }
     }
 
+    fn push(&mut self, (node, children): (&str, usize)) {
+        self.path.push(node);
+        self.child_counts.push(children)
+    }
+
     fn pop(&mut self) -> Option<(String, usize)> {
         if let Some(top) = self.child_counts.pop() {
-            Some(self.path.pop().expect("subpath not in sync with counts"), top)
+            Some((self.path.pop().expect("subpath not in sync with counts"), top))
+        } else {
+            None
+        }
+    }
+
+    fn top(&self) -> Option<(&str, usize)> {
+        if let Some(top) = self.child_counts.last() {
+            Some((self.path.top().expect("subpath not in sync with counts"), *top))
         } else {
             None
         }
@@ -82,59 +99,85 @@ impl PathState {
 }
 
 struct PathCounter {
-    stack: Vec<&str>,
-    state: PathState,
+    stack: Subpath,
+    status: PathState,
+    verbose: bool,
     // counts: HashMap<Subpath, usize>, // TODO use to recognize common subtrees
 }
 
 impl PathCounter {
-    fn with_capacity(g: &'a Graph, c: usize) -> PathCounter {
-        PathCounter { Vec::with_capacity(c), PathState::with_capacity(c) }
+    fn with_capacity(c: usize, verbose: bool) -> PathCounter {
+        PathCounter {
+            stack: Subpath::with_capacity(c),
+            status: PathState::with_capacity(c),
+            verbose,
+        }
     }
 
     fn push(&mut self, g: &Graph, node: &str) {
-        self.stack.push(start);
+        // Don't visit lower-case nodes which have already been visited.
+        // Push children onto the stack, and push the node and number
+        // of children onto the status.
+        let mut count = 0;
+        if self.verbose {
+            println!("pushing '{}' with children:", node);
+        }
+        for adj in g.adjacent(node).iter() {
+            if !is_lower(adj) || !self.status.path.contains(adj) {
+                if self.verbose {
+                    print!("  '{}'", adj);
+                }
+                self.stack.push(adj);
+                count += 1;
+            }
+        }
+        if self.verbose {
+            println!("  | count = {}", count);
+        }
+        self.status.push((node, count));
     }
 
     fn count(&mut self, g: &Graph, start: &str, end: &str) -> usize {
+        let start = &name_trans(start);
+        let end = &name_trans(end);
         let mut counts = 0;
-        self.push(start);
-        let mut popped = false;
-        while let Some(path) = stack.pop() {
-            path.push((path, self.adj[path]));
-            if let Some((node, mut children)) = path.top() {
-                // If we just popped off the status, we finished up a child traversal.
-                if popping {
-                    children -= 1;
-                    *path.1.last_mut() = children;
+        self.push(g, start);
+        while let Some(node) = self.stack.pop() {
+            if &node == end {
+                counts += 1;
+                if self.verbose {
+                    println!("found end node, paths now = {}", counts);
                 }
-                if children == 0 {
-                    path.pop();
-                    popped = true;
-                } else {
-                    // Still have children to visit.
-                    if top == self.end {
-                        // prefix is now a complete path.
-                        1
-                    } else {
-                        path.push(node);
-                        match self.counts.entry(path) {
-                            Entry::Occupied(e) => *e.get(),
-                            Entry::Vacant(e) => {
-                                let mut sum = 0;
-                                for adjacent in self.g.adj[node].iter()
-                                    .filter(|adj| !is_lower(adj) || !e.key().contains(adj))
-                                {
-                                    let next_path = e.key().clone();
-                                    self.count_paths(e.key().clone(), adjacent);
-                                }
-                                *e.insert(sum)
-                            }
+            } else {
+                self.push(g, &node);
+            }
+            if self.verbose {
+                println!("  STACK: {:?} | {}", self.stack, node);
+                println!(" STATUS: {:?}", self.status);
+            }
+            let top = self.status.top().expect("empty status right after push");
+            // If we're looking at a node with no children, we've reached the end of a path.
+            // If the node is 'end' we've found a valid unique path, otherwise it's a deadend.
+            if top.1 == 0 || &node == end {
+                // Unroll status to the next branch with more children to visit.
+                'popping: while let Some(top) = self.status.top() {
+                    if top.1 <= 1 {
+                        if self.verbose {
+                            println!("popping '{}' from status", top.0);
                         }
+                        self.status.pop();
+                    } else {
+                        *self.status.child_counts.last_mut().expect("Some top, None last") -= 1;
+                        if self.verbose {
+                            let top = self.status.top().expect("duh");
+                            println!("now '{}' has {} children left", top.0, top.1);
+                        }
+                        break 'popping;
                     }
                 }
             }
         }
+        counts
     }
 }
 
@@ -144,8 +187,8 @@ impl Graph {
         for line in input.lines() {
             let line = line?;
             let mut items = line.split("-");
-            let node1 = items.next().ok_or("missing left node")?;
-            let node2 = items.next().ok_or("missing right node")?;
+            let node1 = name_trans(items.next().ok_or("missing left node")?);
+            let node2 = name_trans(items.next().ok_or("missing right node")?);
             adj.entry(node1.to_string())
                 .or_insert_with(|| Vec::<String>::new())
                 .push(node2.to_string());
@@ -156,8 +199,12 @@ impl Graph {
         Ok(Graph { adj })
     }
 
-    fn count_paths(&self, start: &str, end: &str) -> usize {
-        PathCounter::with_capacity(g.adj.len()).count(self, start, end)
+    fn adjacent(&self, node: &str) -> &Vec<String> {
+        &self.adj[node]
+    }
+
+    fn count_paths(&self, start: &str, end: &str, verbose: bool) -> usize {
+        PathCounter::with_capacity(self.adj.len(), verbose).count(self, start, end)
     }
 }
 
@@ -184,7 +231,7 @@ impl Day for Day12 {
         if opts.verbose {
             println!("{}", g);
         }
-        Ok((PartResult::from(|| g.count_paths("start".into(), "end".into())),
+        Ok((PartResult::from(|| g.count_paths("start".into(), "end".into(), opts.verbose)),
             PartResult::new()))
     }
 }
