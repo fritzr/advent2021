@@ -69,29 +69,42 @@ fn is_lower(s: &str) -> bool {
 struct PathState {
     path: Subpath,
     child_counts: Vec<usize>,
+    subtree_counts: Vec<usize>,
 }
 
 impl PathState {
     fn with_capacity(c: usize) -> PathState {
-        PathState { path: Subpath::with_capacity(c), child_counts: Vec::with_capacity(c) }
+        PathState {
+            path: Subpath::with_capacity(c),
+            child_counts: Vec::with_capacity(c),
+            subtree_counts: Vec::with_capacity(c),
+        }
     }
 
-    fn push(&mut self, (node, children): (&str, usize)) {
+    fn push(&mut self, (node, children, subpaths): (&str, usize, usize)) {
         self.path.push(node);
-        self.child_counts.push(children)
+        self.child_counts.push(children);
+        self.subtree_counts.push(subpaths);
     }
 
-    fn pop(&mut self) -> Option<(String, usize)> {
-        if let Some(top) = self.child_counts.pop() {
-            Some((self.path.pop().expect("subpath not in sync with counts"), top))
+    fn pop(&mut self) -> Option<(String, usize, usize)> {
+        if let Some(node) = self.path.pop() {
+            Some((node,
+                  self.child_counts.pop().expect("child_counts not in-sync on pop"),
+                  self.subtree_counts.pop().expect("subtree_counts not in-sync on pop")
+                  ))
         } else {
             None
         }
     }
 
-    fn top(&self) -> Option<(&str, usize)> {
+    fn len(&self) -> usize { self.child_counts.len() }
+
+    fn top(&self) -> Option<(&str, usize, usize)> {
         if let Some(top) = self.child_counts.last() {
-            Some((self.path.top().expect("subpath not in sync with counts"), *top))
+            Some((self.path.top().expect("path not in sync on top"),
+                  *top,
+                  *self.subtree_counts.last().expect("subtree_counts not in-sync on top")))
         } else {
             None
         }
@@ -101,8 +114,8 @@ impl PathState {
 struct PathCounter {
     stack: Subpath,
     status: PathState,
+    counts: HashMap<Subpath, usize>,
     verbose: bool,
-    // counts: HashMap<Subpath, usize>, // TODO use to recognize common subtrees
 }
 
 impl PathCounter {
@@ -110,47 +123,72 @@ impl PathCounter {
         PathCounter {
             stack: Subpath::with_capacity(c),
             status: PathState::with_capacity(c),
+            counts: HashMap::with_capacity(c),
             verbose,
         }
     }
 
-    fn push(&mut self, g: &Graph, node: &str) {
+    fn unique_subpath(path: &Subpath) -> Subpath {
+        let mut chunks: Vec<&str> = path.0.as_bytes()
+            .chunks(2)
+            .map(|node| std::str::from_utf8(node).unwrap())
+            .filter(|node| is_lower(node))
+            .collect();
+        chunks.sort();
+        Subpath(chunks.into_iter().flat_map(|s| s.chars()).collect())
+    }
+
+    fn get_count(&self, path: &Subpath) -> Option<usize> {
+        self.counts.get(&Self::unique_subpath(path)).and_then(|x| Some(*x))
+    }
+
+    fn set_count(&mut self, mut path: Subpath, count: usize) {
+        path = Self::unique_subpath(&path);
+        *self.counts.entry(path).or_insert(count) = count;
+    }
+
+    fn push(&mut self, g: &Graph, node: &str, end: &str) {
         // Don't visit lower-case nodes which have already been visited.
         // Push children onto the stack, and push the node and number
         // of children onto the status.
-        let mut count = 0;
         if self.verbose {
             println!("pushing '{}' with children:", node);
         }
-        for adj in g.adjacent(node).iter() {
-            if !is_lower(adj) || !self.status.path.contains(adj) {
-                if self.verbose {
-                    print!("  '{}'", adj);
-                }
-                self.stack.push(adj);
-                count += 1;
+        if node == end {
+            self.status.push((node, 0, 1));
+        } else {
+            // If we already know the counts for this subtree, push it with 0 children.
+            // It will get popped immediately and the number of paths accumulated.
+            let mut count = 0;
+            let npaths =
+                if let Some(npaths) = self.get_count(&Subpath(self.status.path.0.clone() + node)) {
+                    npaths
+                } else {
+                    for adj in g.adjacent(node).iter() {
+                        if !is_lower(adj) || !self.status.path.contains(adj) {
+                            if self.verbose {
+                                print!("  '{}'", adj);
+                            }
+                            self.stack.push(adj);
+                            count += 1;
+                        }
+                    }
+                    0
+                };
+            if self.verbose {
+                println!("  | count = {}", count);
             }
+            self.status.push((node, count, npaths));
         }
-        if self.verbose {
-            println!("  | count = {}", count);
-        }
-        self.status.push((node, count));
     }
 
     fn count(&mut self, g: &Graph, start: &str, end: &str) -> usize {
         let start = &name_trans(start);
         let end = &name_trans(end);
         let mut counts = 0;
-        self.push(g, start);
+        self.push(g, start, end);
         while let Some(node) = self.stack.pop() {
-            if &node == end {
-                counts += 1;
-                if self.verbose {
-                    println!("found end node, paths now = {}", counts);
-                }
-            } else {
-                self.push(g, &node);
-            }
+            self.push(g, &node, end);
             if self.verbose {
                 println!("  STACK: {:?} | {}", self.stack, node);
                 println!(" STATUS: {:?}", self.status);
@@ -160,16 +198,26 @@ impl PathCounter {
             // If the node is 'end' we've found a valid unique path, otherwise it's a deadend.
             if top.1 == 0 || &node == end {
                 // Unroll status to the next branch with more children to visit.
-                'popping: while let Some(top) = self.status.top() {
+                let mut subtree_count = 0;
+                'popping: while self.status.len() > 0 {
+                    // Accumulate the number of child paths into the current path.
+                    if subtree_count > 0 {
+                        *self.status.subtree_counts.last_mut().unwrap() += subtree_count;
+                    }
+                    let top = self.status.top().unwrap();
                     if top.1 <= 1 {
                         if self.verbose {
                             println!("popping '{}' from status", top.0);
                         }
-                        self.status.pop();
+                        // Now we've completed the subtree: pop it and remember its paths.
+                        let subpath = self.status.path.clone();
+                        subtree_count = self.status.pop().unwrap().2;
+                        counts += subtree_count;
+                        self.set_count(subpath, subtree_count);
                     } else {
-                        *self.status.child_counts.last_mut().expect("Some top, None last") -= 1;
+                        *self.status.child_counts.last_mut().unwrap() -= 1;
                         if self.verbose {
-                            let top = self.status.top().expect("duh");
+                            let top = self.status.top().unwrap();
                             println!("now '{}' has {} children left", top.0, top.1);
                         }
                         break 'popping;
