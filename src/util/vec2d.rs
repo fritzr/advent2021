@@ -12,6 +12,12 @@ pub struct Vec2d<T=i32> {
 
 #[allow(dead_code)]
 impl<T> Vec2d<T> {
+    pub fn from<U>(value: U, shape: (usize, usize)) -> Self
+        where Vec<T>: FromIterator<U>, U: Copy
+    {
+        Self { data: std::iter::repeat(value).take(shape.0 * shape.1).collect(), shape }
+    }
+
     /// Create a `Vec2d<T>` using a generator function.
     pub fn generate<F>(rows: usize, cols: usize, f: F) -> Self
         where F: Fn(usize, usize) -> T
