@@ -55,8 +55,13 @@ impl Subpath {
         }
     }
 
-    fn contains(&self, s: &str) -> bool {
-        self.0.as_bytes().chunks(2).find(|window| window == &s.as_bytes()).is_some()
+    fn nodes(&self) -> impl Iterator<Item=&str> {
+        self.0.as_bytes().chunks(2).map(|bytes| std::str::from_utf8(bytes).unwrap())
+    }
+
+    fn count(&self, s: &str) -> usize {
+        let s_bytes = s.as_bytes();
+        self.0.as_bytes().chunks(2).filter(|node| node == &s_bytes).count()
     }
 }
 
@@ -121,6 +126,8 @@ struct PathCounter {
     stack: Subpath,
     status: PathState,
     counts: HashMap<Subpath, usize>,
+    // Number of times a node can be visited, or None for infinitely many times.
+    capacity: HashMap<String, Option<usize>>,
     verbose: bool,
 }
 
@@ -130,29 +137,29 @@ impl PathCounter {
             stack: Subpath::with_capacity(c),
             status: PathState::with_capacity(c),
             counts: HashMap::with_capacity(c),
+            capacity: HashMap::with_capacity(c),
             verbose,
         }
     }
 
-    fn unique_subpath(path: Subpath) -> Subpath {
+    fn unique_subpath(&self, path: Subpath) -> Subpath {
         let top = path.top();
-        let mut chunks: Vec<&str> = path.0.as_bytes()
-            .chunks(2)
-            .map(|node| std::str::from_utf8(node).unwrap())
-            .filter(|node| is_lower(node))
+        assert_eq!(top.is_none() || self.is_multinode(top.unwrap()), true);
+        let mut nodes: Vec<&str> = path.nodes()
+            .filter(|node| !self.is_multinode(node))
             .collect();
-        chunks.sort();
-        Subpath(chunks.into_iter().flat_map(|s| s.chars()).collect::<String>()
+        nodes.sort();
+        Subpath(nodes.into_iter().flat_map(|s| s.chars()).collect::<String>()
                 + &top.unwrap_or(""))
     }
 
     fn get_count(&self, mut path: Subpath) -> Option<usize> {
         if let Some(top) = path.top() {
-            if is_lower(top) {
+            if !self.is_multinode(top) {
                 return None;
             }
         }
-        path = Self::unique_subpath(path);
+        path = self.unique_subpath(path);
         let result = self.counts.get(&path).and_then(|x| Some(*x));
         if self.verbose {
             if let Some(npaths) = result {
@@ -164,8 +171,8 @@ impl PathCounter {
 
     fn set_count(&mut self, mut path: Subpath, count: usize) {
         if let Some(top) = path.top() {
-            if !is_lower(top) {
-                path = Self::unique_subpath(path);
+            if self.is_multinode(top) {
+                path = self.unique_subpath(path);
                 if self.verbose {
                     println!("  memoizing {{{}}} with {} paths", path, count);
                 }
@@ -175,7 +182,6 @@ impl PathCounter {
     }
 
     fn push(&mut self, g: &Graph, node: &str, end: &str) {
-        // Don't visit lower-case nodes which have already been visited.
         // Push children onto the stack, and push the node and number
         // of children onto the status.
         if self.verbose {
@@ -186,26 +192,40 @@ impl PathCounter {
         } else {
             // If we already know the counts for this subtree, push it with 0 children.
             // It will get popped immediately and the number of paths accumulated.
-            let mut count = 0;
+            let mut children = 0;
             let npaths =
                 if let Some(npaths) = self.get_count(Subpath(self.status.path.0.clone() + node)) {
                     npaths
                 } else {
+                    // Push all children.
+                    // Cut children which have met their capacity (number of appearances in path).
                     for adj in g.adjacent(node).iter() {
-                        if !is_lower(adj) || !self.status.path.contains(adj) {
+                        let capacity = self.capacity.get_mut(adj).unwrap();
+                        if capacity.is_none()
+                            || (capacity.is_some()
+                                && self.status.path.count(adj) < capacity.unwrap())
+                        {
                             if self.verbose {
                                 print!("  '{}'", adj);
                             }
                             self.stack.push(adj);
-                            count += 1;
+                            children += 1;
                         }
                     }
                     0
                 };
             if self.verbose {
-                println!("  | count = {}", count);
+                println!("  | count = {}", children);
             }
-            self.status.push((node, count, npaths));
+            self.status.push((node, children, npaths));
+        }
+    }
+
+    fn is_multinode(&self, node: &str) -> bool {
+        if let Some(c) = self.capacity.get(node) {
+            c.is_none()
+        } else {
+            false
         }
     }
 
@@ -243,7 +263,7 @@ impl PathCounter {
                                 self.status.path.0, count
                             );
                         }
-                        if !is_lower(subpath.top().unwrap()) {
+                        if self.is_multinode(subpath.top().unwrap()) {
                             self.set_count(subpath, count);
                         }
                     } else {
@@ -283,8 +303,43 @@ impl Graph {
         &self.adj[node]
     }
 
+    // Mapping of number of times each node can be visited.
+    //
+    // None means unbounded number of visits.
+    fn capacities(&self, start: &str, end: &str) -> HashMap<String, Option<usize>> {
+        self.adj.keys().map(|node| {
+            if node == start || node == end { (node.clone(), Some(1)) }
+            else if is_lower(node) { (node.clone(), Some(1)) }
+            else { (node.clone(), None) }
+        }).collect()
+    }
+
     fn count_paths(&self, start: &str, end: &str, verbose: bool) -> usize {
-        PathCounter::with_capacity(self.adj.len(), verbose).count(self, start, end)
+        let start = name_trans(start);
+        let end = name_trans(end);
+        let mut counter = PathCounter::with_capacity(self.adj.len(), verbose);
+        counter.capacity = self.capacities(&start, &end);
+        counter.count(self, &start, &end)
+    }
+
+    // Count the number of paths where one lowercase node can be visited twice.
+    fn count_paths_part2(&self, start: &str, end: &str, verbose: bool) -> usize {
+        let start = name_trans(start);
+        let end = name_trans(end);
+        let mut counter = PathCounter::with_capacity(self.adj.len(), verbose);
+        counter.capacity = self.capacities(&start, &end);
+        let mut counts = 0;
+        for node in self.adj.keys()
+        {
+            if node != &start && node != &end && counter.capacity[node].unwrap_or(0) == 1 {
+                *counter.capacity.get_mut(node).unwrap().as_mut().unwrap() = 2;
+                counter.counts.clear(); // XXX we could maybe save some memos...
+                // XXX this probably counts many paths multiple times, need to de-dup
+                counts += counter.count(self, &start, &end);
+                *counter.capacity.get_mut(node).unwrap().as_mut().unwrap() = 1;
+            }
+        }
+        counts
     }
 }
 
@@ -312,7 +367,7 @@ impl Day for Day12 {
             println!("{}", g);
         }
         Ok((PartResult::from(|| g.count_paths("start".into(), "end".into(), opts.verbose)),
-            PartResult::new()))
+            PartResult::from(|| g.count_paths_part2("start".into(), "end".into(), opts.verbose))))
     }
 }
 
