@@ -60,6 +60,12 @@ impl Subpath {
     }
 }
 
+impl Display for Subpath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
 fn is_lower(s: &str) -> bool {
     s.find(char::is_uppercase) == None
 }
@@ -128,23 +134,44 @@ impl PathCounter {
         }
     }
 
-    fn unique_subpath(path: &Subpath) -> Subpath {
+    fn unique_subpath(path: Subpath) -> Subpath {
+        let top = path.top();
         let mut chunks: Vec<&str> = path.0.as_bytes()
             .chunks(2)
             .map(|node| std::str::from_utf8(node).unwrap())
             .filter(|node| is_lower(node))
             .collect();
         chunks.sort();
-        Subpath(chunks.into_iter().flat_map(|s| s.chars()).collect())
+        Subpath(chunks.into_iter().flat_map(|s| s.chars()).collect::<String>()
+                + &top.unwrap_or(""))
     }
 
-    fn get_count(&self, path: &Subpath) -> Option<usize> {
-        self.counts.get(&Self::unique_subpath(path)).and_then(|x| Some(*x))
+    fn get_count(&self, mut path: Subpath) -> Option<usize> {
+        if let Some(top) = path.top() {
+            if is_lower(top) {
+                return None;
+            }
+        }
+        path = Self::unique_subpath(path);
+        let result = self.counts.get(&path).and_then(|x| Some(*x));
+        if self.verbose {
+            if let Some(npaths) = result {
+                println!("  loaded memo for {{{}}} with {} paths", path, npaths);
+            }
+        }
+        result
     }
 
     fn set_count(&mut self, mut path: Subpath, count: usize) {
-        path = Self::unique_subpath(&path);
-        *self.counts.entry(path).or_insert(count) = count;
+        if let Some(top) = path.top() {
+            if !is_lower(top) {
+                path = Self::unique_subpath(path);
+                if self.verbose {
+                    println!("  memoizing {{{}}} with {} paths", path, count);
+                }
+                *self.counts.entry(path).or_insert(count) = count;
+            }
+        }
     }
 
     fn push(&mut self, g: &Graph, node: &str, end: &str) {
@@ -161,7 +188,7 @@ impl PathCounter {
             // It will get popped immediately and the number of paths accumulated.
             let mut count = 0;
             let npaths =
-                if let Some(npaths) = self.get_count(&Subpath(self.status.path.0.clone() + node)) {
+                if let Some(npaths) = self.get_count(Subpath(self.status.path.0.clone() + node)) {
                     npaths
                 } else {
                     for adj in g.adjacent(node).iter() {
@@ -185,7 +212,7 @@ impl PathCounter {
     fn count(&mut self, g: &Graph, start: &str, end: &str) -> usize {
         let start = &name_trans(start);
         let end = &name_trans(end);
-        let mut counts = 0;
+        let mut count = 0;
         self.push(g, start, end);
         while let Some(node) = self.stack.pop() {
             self.push(g, &node, end);
@@ -198,22 +225,27 @@ impl PathCounter {
             // If the node is 'end' we've found a valid unique path, otherwise it's a deadend.
             if top.1 == 0 || &node == end {
                 // Unroll status to the next branch with more children to visit.
-                let mut subtree_count = 0;
+                count = 0;
                 'popping: while self.status.len() > 0 {
                     // Accumulate the number of child paths into the current path.
-                    if subtree_count > 0 {
-                        *self.status.subtree_counts.last_mut().unwrap() += subtree_count;
+                    if count > 0 {
+                        *self.status.subtree_counts.last_mut().unwrap() += count;
                     }
                     let top = self.status.top().unwrap();
                     if top.1 <= 1 {
-                        if self.verbose {
-                            println!("popping '{}' from status", top.0);
-                        }
-                        // Now we've completed the subtree: pop it and remember its paths.
+                        // Now we've completed the subtree: pop it and memoize if possible.
                         let subpath = self.status.path.clone();
-                        subtree_count = self.status.pop().unwrap().2;
-                        counts += subtree_count;
-                        self.set_count(subpath, subtree_count);
+                        count = self.status.pop().unwrap().2;
+                        // We can only memoize paths ending in a multi-node.
+                        if self.verbose {
+                            println!(
+                                "finished subtree '{}' with {} paths",
+                                self.status.path.0, count
+                            );
+                        }
+                        if !is_lower(subpath.top().unwrap()) {
+                            self.set_count(subpath, count);
+                        }
                     } else {
                         *self.status.child_counts.last_mut().unwrap() -= 1;
                         if self.verbose {
@@ -225,7 +257,7 @@ impl PathCounter {
                 }
             }
         }
-        counts
+        count
     }
 }
 
