@@ -1,3 +1,5 @@
+#![feature(linked_list_cursors)]
+
 use std::error::Error;
 use std::io::BufRead;
 use std::time::{Instant, Duration};
@@ -18,7 +20,7 @@ mod d10;
 mod d11;
 mod d12;
 mod d13;
-//mod d14;
+mod d14;
 //mod d15;
 //mod d16;
 //mod d17;
@@ -65,7 +67,7 @@ pub trait Day {
     fn run(&self, input: &mut dyn BufRead, cli: &cli::Cli) -> Result<(PartResult, PartResult), Box<dyn Error>>;
 }
 
-const DAYS: [&dyn Day; 13] = [
+const DAYS: [&dyn Day; 14] = [
     &d01::Day1{},
     &d02::Day2{},
     &d03::Day3{},
@@ -79,6 +81,7 @@ const DAYS: [&dyn Day; 13] = [
     &d11::Day11{},
     &d12::Day12{},
     &d13::Day13{},
+    &d14::Day14{},
 ];
 
 const MAX_DAY: usize = DAYS.len();
