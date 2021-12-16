@@ -1,7 +1,7 @@
 use std::io::BufRead;
 use crate::{cli, Day, PartResult};
 use std::error::Error;
-use std::collections::HashMap; // , hash_map::Entry};
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
 pub struct Day12;
@@ -229,6 +229,7 @@ impl PathCounter {
         }
     }
 
+    // Specialized version of visit() which counts paths quicker than visiting them all.
     fn count(&mut self, g: &Graph, start: &str, end: &str) -> usize {
         let start = &name_trans(start);
         let end = &name_trans(end);
@@ -279,6 +280,36 @@ impl PathCounter {
         }
         count
     }
+
+    // Visit all paths from start to end.
+    fn visit<F>(&mut self, g: &Graph, start: &str, end: &str, mut visit: F)
+        where F: FnMut(Subpath)
+    {
+        let start = &name_trans(start);
+        let end = &name_trans(end);
+        self.push(g, start, end);
+        while let Some(node) = self.stack.pop() {
+            self.push(g, &node, end);
+            let top = self.status.top().expect("empty status right after push");
+            if top.1 == 0 || &node == end {
+                'popping: while self.status.len() > 0 {
+                    let top = self.status.top().unwrap();
+                    if top.1 <= 1 {
+                        let (top, _, _) = self.status.pop().unwrap();
+                        // Need to visit all paths, so we couldn't really memoize anything
+                        // other than the entire path set. Visit only complete subpaths.
+                        if &top == end {
+                            visit(Subpath(self.status.path.0.clone() + &top));
+                        }
+                    } else {
+                        *self.status.child_counts.last_mut().unwrap() -= 1;
+                        break 'popping;
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 impl Graph {
@@ -327,19 +358,24 @@ impl Graph {
         let start = name_trans(start);
         let end = name_trans(end);
         let mut counter = PathCounter::with_capacity(self.adj.len(), verbose);
+        let mut paths = HashSet::<String>::new(); // capacity: a lot
         counter.capacity = self.capacities(&start, &end);
-        let mut counts = 0;
         for node in self.adj.keys()
         {
             if node != &start && node != &end && counter.capacity[node].unwrap_or(0) == 1 {
                 *counter.capacity.get_mut(node).unwrap().as_mut().unwrap() = 2;
                 counter.counts.clear(); // XXX we could maybe save some memos...
                 // XXX this probably counts many paths multiple times, need to de-dup
-                counts += counter.count(self, &start, &end);
+                counter.visit(self, &start, &end, |path| {
+                    if verbose {
+                        println!("** visiting {}", path);
+                    }
+                    paths.insert(path.0);
+                });
                 *counter.capacity.get_mut(node).unwrap().as_mut().unwrap() = 1;
             }
         }
-        counts
+        paths.len()
     }
 }
 
