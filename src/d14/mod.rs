@@ -104,6 +104,10 @@ fn polymer_counts(polymer: &String, rules: &HashMap<u16, u8>, steps: usize, verb
         chars[ichar(pair[1])] += 1;
         *pairs.entry(polypair(pair[0], pair[1])).or_insert(0) += 1;
     }
+    // The last character is not covered by windows(2).
+    if let Some(b) = polymer.as_bytes().last() {
+        chars[ichar(*b)] += 1;
+    }
     if verbose {
         println!("To begin, counts are:\n  [chars] {}\n  [pairs] {}",
                  dispchars(&chars), disppairs(&pairs));
