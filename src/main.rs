@@ -1,5 +1,3 @@
-#![feature(linked_list_cursors)]
-
 use std::error::Error;
 use std::io::BufRead;
 use std::time::{Instant, Duration};
